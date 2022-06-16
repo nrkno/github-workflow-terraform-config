@@ -23,10 +23,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Determine need for SSH agent
+        id: ssh-agent-test
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ssh-private-key }}
+        run: |
+          set +e
+          test -n "${SSH_PRIVATE_KEY}"
+          echo "::set-output name=exit_code::${?}"
+
       # SSH agent used to checkout Terraform modules from other private repos
       # on Github. Read the note "Github Actions SSH" in our Lastpass vault
       # for more information.
       - uses: webfactory/ssh-agent@v0.5.4
+        # Work-around for not being able to test if a secret has been set when
+        # using `if` for conditional step execution.
+        if: steps.ssh-agent-test.outputs.exit_code == '0'
         with:
           ssh-private-key: ${{ secrets.ssh-private-key }}
 
