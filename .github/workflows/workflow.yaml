@@ -1,0 +1,110 @@
+name: 'Terraform Checks'
+
+on:
+  workflow_call:
+    inputs:
+      terraform-version:
+        type: string
+        default: latest
+      working-directory:
+        type: string
+        default: .
+    secrets:
+      token:
+        required: true
+      ssh-private-key:
+        required: true
+
+jobs:
+  terraform:
+    name: Terraform config validation
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # SSH agent used to checkout Terraform modules from other private repos
+      # on Github. Read the note "Github Actions SSH" in our Lastpass vault
+      # for more information.
+      - uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.ssh-private-key }}
+
+      - name: Setup
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Check formatting (lint)
+        id: fmt
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set +e
+          terraform fmt -check -recursive -list=true
+          echo "::set-output name=exit_code::${?}"
+        continue-on-error: true
+
+      - name: Initialise
+        id: init
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set +e
+          terraform init -no-color
+          echo "::set-output name=exit_code::${?}"
+        continue-on-error: true
+
+      - name: Validate
+        id: validate
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set +e
+          terraform validate -no-color
+          echo "::set-output name=exit_code::${?}"
+        continue-on-error: true
+
+      - name: Post results as comment
+        uses: actions/github-script@v6
+        if: ${{ github.event.pull_request && github.actor != 'dependabot[bot]' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const bool_emoji = (v) => Boolean(v) ? '✔️' : '❌';
+            const data = {
+              url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              fmt: bool_emoji(${{ steps.fmt.outputs.exit_code == '0' }}),
+              init: bool_emoji(${{ steps.init.outputs.exit_code == '0' }}),
+              validate: bool_emoji(${{ steps.validate.outputs.exit_code == '0' }}),
+              status: Boolean(${{ steps.fmt.outputs.exit_code == '0' && steps.init.outputs.exit_code == '0' && steps.validate.outputs.exit_code == '0' }})
+            }
+            const body = `[check](${data.url}) ${data.status ? 'succeeded' : 'failed'}:\nformat: ${data.fmt} | init: ${data.init} | validate: ${data.validate}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body,
+            });
+
+      - name: 'Job results'
+        shell: python
+        run: |
+          import sys
+
+          test_cases = dict(
+            fmt="${{ steps.fmt.outputs.exit_code }}",
+            init="${{ steps.init.outputs.exit_code }}",
+            validate="${{ steps.validate.outputs.exit_code }}",
+          )
+
+          failed = False
+          for name, exit_code in test_cases.items():
+            success = exit_code == "0"
+            print(name, success)
+            if not success:
+              failed = True
+
+          if failed:
+            sys.exit(1)
