@@ -19,3 +19,7 @@ jobs:
       # Must be specified if using Terraform modules from private git repos.
       ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
 ```
+
+## References
+- https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputs
+- https://docs.github.com/en/actions/using-workflows/reusing-workflows
