@@ -1,8 +1,10 @@
 on:
   push:
-    - main
+    branches:
+      - main
   pull_request_target:
-    - main
+    branches:
+      - main
 
 jobs:
   terraform-config:
