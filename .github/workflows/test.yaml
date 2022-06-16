@@ -1,0 +1,15 @@
+on:
+  push:
+    - main
+  pull_request_target:
+    - main
+
+jobs:
+  terraform-config:
+    name: Terraform config validation
+    uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@main
+    with:
+      working-directory: ./test
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+      ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
