@@ -13,9 +13,10 @@ on:
       ssh-private-key:
         required: true
 
+name: Terraform
 jobs:
   terraform:
-    name: Terraform config validation
+    name: Config Validation
     runs-on: self-hosted
     steps:
       - name: Checkout
