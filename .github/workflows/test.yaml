@@ -9,7 +9,7 @@ on:
 jobs:
   terraform-config:
     name: Terraform config validation
-    uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@main
+    uses: ./.github/workflows/workflow.yaml
     with:
       working-directory: ./test
     secrets:
