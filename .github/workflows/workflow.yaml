@@ -25,9 +25,6 @@ jobs:
     name: Config Validation
     runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
       - name: Determine need for SSH agent
         id: ssh-agent-test
         shell: bash
@@ -54,6 +51,9 @@ jobs:
           if [ '${{ inputs.enable-azurerm-3-beta-resources }}' = 'true' ]; then
             echo 'ARM_THREEPOINTZERO_BETA_RESOURCES=true' >> $GITHUB_ENV
           fi
+
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Setup
         uses: hashicorp/setup-terraform@v2
