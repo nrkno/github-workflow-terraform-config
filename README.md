@@ -13,7 +13,11 @@ jobs:
     uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@main
     with:
       # Path to your Terraform code to check, relative to repository root.
+      # Default: .
       working-directory: .
+      # Terraform version to use.
+      # Default: latest
+      terraform-version: latest
       # Set environment variable ARM_THREEPOINTZERO_BETA_RESOURCES=true.
       # Default: false
       enable-azurerm-3-beta-resources: false
