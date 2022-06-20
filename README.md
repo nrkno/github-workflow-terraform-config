@@ -14,6 +14,9 @@ jobs:
     with:
       # Path to your Terraform code to check, relative to repository root.
       working-directory: .
+      # Set environment variable ARM_THREEPOINTZERO_BETA_RESOURCES=true.
+      # Default: false
+      enable-azurerm-3-beta-resources: false
     secrets:
       # Must be specified to post status comments to incoming PR's.
       token: ${{ secrets.GITHUB_TOKEN }}

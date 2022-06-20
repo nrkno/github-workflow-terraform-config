@@ -7,6 +7,12 @@ on:
       working-directory:
         type: string
         default: .
+
+      # Toggles used for setting environment variables in this workflow.
+      # It is not possible to pass env vars directly to reusable workflows.
+      enable-azurerm-3-beta-resources:
+        type: boolean
+        default: false
     secrets:
       token:
         required: true
@@ -41,6 +47,13 @@ jobs:
         if: steps.ssh-agent-test.outputs.exit_code == '0'
         with:
           ssh-private-key: ${{ secrets.ssh-private-key }}
+
+      - name: Set environment toggles
+        run: |
+          set +ex
+          if [ '${{ inputs.enable-azurerm-3-beta-resources }}' = 'true' ]; then
+            echo 'ARM_THREEPOINTZERO_BETA_RESOURCES=true' >> $GITHUB_ENV
+          fi
 
       - name: Setup
         uses: hashicorp/setup-terraform@v2
