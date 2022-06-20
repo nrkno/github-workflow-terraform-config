@@ -18,6 +18,9 @@ jobs:
       # Terraform version to use.
       # Default: latest
       terraform-version: latest
+      # Comma separated list of filepaths to delete before running Terraform.
+      # Default: ""
+      ignore-files: ""
       # Set environment variable ARM_THREEPOINTZERO_BETA_RESOURCES=true.
       # Default: false
       enable-azurerm-3-beta-resources: false

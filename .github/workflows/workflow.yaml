@@ -7,6 +7,9 @@ on:
       working-directory:
         type: string
         default: .
+      ignore-files:
+        type: string
+        default: ""
 
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
@@ -54,6 +57,38 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+
+      # Delete ignored files inside repo before running Terraform.
+      # This is useful e.g. if the repository has configured a Terraform
+      # backend that should not be used when simply validating the
+      # configuration.
+      # Care is taken to prevent deletion of files outside of the repository
+      # root.
+      - name: Remove ignored files
+        if: inputs.ignore-files != ''
+        env:
+          IGNORE_FILES: ${{ inputs.ignore-files }}
+        shell: python
+        run: |
+          import os
+          import pathlib
+          import shutil
+
+          fpaths = os.getenv("IGNORE_FILES", "")
+          for fpath in [s.strip() for s in fpaths.split(",")]:
+            # Make sure we only delete files in repo root
+            safe_dir = os.getcwd() + os.sep
+            if not os.path.commonprefix((os.path.realpath(fpath),safe_dir)) == safe_dir:
+              raise ValueError(f"Not allowed to delete path outside of repo root: {fpath}")
+
+            # Delete path
+            p = pathlib.Path(fpath)
+            if p.is_file():
+              p.unlink()
+              print("deleted file:", p.name)
+            elif p.is_dir():
+              shutil.rmtree(p.name)
+              print("deleted directory:", p.name)
 
       - name: Setup
         uses: hashicorp/setup-terraform@v2
