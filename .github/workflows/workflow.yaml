@@ -10,6 +10,12 @@ on:
       ignore-files:
         type: string
         default: ""
+      status-comment-enabled:
+        type: boolean
+        default: true
+      status-comment-message:
+        type: string
+        default: ""
 
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
@@ -128,7 +134,7 @@ jobs:
 
       - name: Post results as comment
         uses: actions/github-script@v6
-        if: ${{ github.event.pull_request && github.actor != 'dependabot[bot]' }}
+        if: github.event.pull_request && github.actor != 'dependabot[bot]' && inputs.status-comment-enabled
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -140,7 +146,7 @@ jobs:
               validate: bool_emoji(${{ steps.validate.outputs.exit_code == '0' }}),
               status: Boolean(${{ steps.fmt.outputs.exit_code == '0' && steps.init.outputs.exit_code == '0' && steps.validate.outputs.exit_code == '0' }})
             }
-            const body = `[check](${data.url}) ${data.status ? 'succeeded' : 'failed'}:\nformat: ${data.fmt} | init: ${data.init} | validate: ${data.validate}`;
+            const body = `[check](${data.url}) ${data.status ? 'succeeded' : 'failed'}:\nformat: ${data.fmt} | init: ${data.init} | validate: ${data.validate}\n\n${{ inputs.status-comment-message }}`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
