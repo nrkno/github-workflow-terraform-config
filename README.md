@@ -31,6 +31,9 @@ jobs:
       # Default: false
       enable-azurerm-3-beta-resources: false
     secrets:
+      # if using private terraform registries, a semicolon seperated list of  registry credentials
+      # on the format domain=token
+      registries: "my-registry.example.com=${{ secrets.MY_REGISTRY_TOKEN }};second.registry.example.com=${{ secret.SECOND_REGISTRY }}"
       # Must be specified to post status comments to incoming PR's.
       token: ${{ secrets.GITHUB_TOKEN }}
       # Must be specified if using Terraform modules from private git repos.
