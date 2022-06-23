@@ -23,6 +23,8 @@ on:
         type: boolean
         default: false
     secrets:
+      registries:
+        required: false
       token:
         required: true
       ssh-private-key:
@@ -53,6 +55,21 @@ jobs:
         if: steps.ssh-agent-test.outputs.exit_code == '0'
         with:
           ssh-private-key: ${{ secrets.ssh-private-key }}
+
+      - name: Set registry secrets
+        shell: bash
+        env:
+          REGISTRIES: "${{ secrets.registries }}"
+        run: |
+          export IFS=';'
+          for registry in $REGISTRIES
+          do
+            echo $registry
+            IFS="=" read domain token <<<$registry
+            tokenvar="TF_TOKEN_$(tr . _ <<<$domain | sed s/-/__/g)"
+            echo "Setting ${tokenvar} for ${domain}"
+            echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
+          done
 
       - name: Set environment toggles
         run: |
