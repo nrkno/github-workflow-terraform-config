@@ -1,6 +1,9 @@
 on:
   workflow_call:
     inputs:
+      remove-backend:
+        type: boolean
+        default: true
       terraform-version:
         type: string
         default: latest
@@ -63,6 +66,12 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Remove backend config file
+        id: remove-backend
+        if: inputs.remove-backend
+        shell: bash
+        run: if [ -f backend.tf ]; then rm backend.tf; fi
 
       # Delete ignored files inside repo before running Terraform.
       # This is useful e.g. if the repository has configured a Terraform
