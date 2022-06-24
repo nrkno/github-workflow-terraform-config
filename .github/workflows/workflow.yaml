@@ -16,6 +16,9 @@ on:
       status-comment-message:
         type: string
         default: ""
+      runs-on:
+        type: string
+        default: self-hosted
 
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
@@ -34,7 +37,7 @@ name: Terraform
 jobs:
   terraform:
     name: Config Validation
-    runs-on: self-hosted
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Determine need for SSH agent
         id: ssh-agent-test

@@ -11,6 +11,7 @@ jobs:
     uses: ./.github/workflows/workflow.yaml
     with:
       working-directory: ./test
+      runs-on: ubuntu-latest
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
       ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
