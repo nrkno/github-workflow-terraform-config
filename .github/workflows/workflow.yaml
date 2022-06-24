@@ -28,9 +28,9 @@ on:
     secrets:
       registries:
         required: false
-      token:
-        required: true
       ssh-private-key:
+        required: true
+      token:
         required: true
 
 name: Terraform
