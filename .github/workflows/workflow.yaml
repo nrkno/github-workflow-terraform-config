@@ -95,6 +95,7 @@ jobs:
         env:
           IGNORE_FILES: ${{ inputs.ignore-files }}
         shell: python
+        working-directory: ${{ inputs.working-directory }}
         run: |
           import os
           import pathlib
