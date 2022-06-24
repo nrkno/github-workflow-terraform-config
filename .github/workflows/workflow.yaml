@@ -19,6 +19,21 @@ on:
       runs-on:
         type: string
         default: self-hosted
+      trivy-job-enabled:
+        type: boolean
+        default: true
+      trivy-ignore-unfixed:
+        type: bool
+        default: true
+      trivy-severity:
+        type: string
+        default: MEDIUM,HIGH,CRITICAL
+      trivy-ignore-files:
+        type: string
+        default: ""
+      trivy-error-is-success:
+        type: boolean
+        default: false
 
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
@@ -99,7 +114,7 @@ jobs:
           import shutil
 
           fpaths = os.getenv("IGNORE_FILES", "")
-          for fpath in [s.strip() for s in fpaths.split(",")]:
+          for fpath in [s.strip() for s in fpaths.split(",") if s]:
             # Make sure we only delete files in repo root
             safe_dir = os.getcwd() + os.sep
             if not os.path.commonprefix((os.path.realpath(fpath),safe_dir)) == safe_dir:
@@ -192,3 +207,53 @@ jobs:
 
           if failed:
             sys.exit(1)
+
+  trivy:
+    name: Trivy Vulnerability Scan in ${{ inputs.working-directory }}
+    runs-on: ${{ inputs.runs-on }}
+    if: inputs.trivy-job-enabled
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Parse ignore files
+        shell: python
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+          IGNORE_FILES: ${{ inputs.trivy-ignore-files }}
+        run: |
+          import os
+
+          gh_env_file = os.getenv("GITHUB_ENV")
+          workdir = os.getenv("WORKING_DIRECTORY")
+          ignorefiles = os.getenv("IGNORE_FILES")
+
+          paths = []
+          for p in [p.strip() for p in ignorefiles.split(",") if p]:
+            paths.append(os.path.join(workdir, p))
+
+          if paths:
+            with open(gh_env_file, 'a') as f:
+              print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
+
+      - name: Scan IaC code
+        uses: aquasecurity/trivy-action@0.5.1
+        id: trivy-scan
+        with:
+          exit-code: '0'
+          format: json
+          hide-progress: false
+          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
+          output: .trivy-scan-result.json
+          scan-ref: ${{ inputs.working-directory }}
+          scan-type: config
+          severity: ${{ inputs.trivy-severity }}
+          trivyignores: ${{ env.TRIVYIGNORE_PATHS }}
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Parse and report results
+        run: .github/workflows/trivy-comment.py .trivy-scan-result.json
+        continue-on-error: ${{ inputs.trivy-error-is-success }}
