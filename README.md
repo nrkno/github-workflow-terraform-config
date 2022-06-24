@@ -27,12 +27,13 @@ jobs:
       # Enable posting of a status comments after check has completed.
       # Default: true
       status-comment-enabled: true
-      # Set environment variable ARM_THREEPOINTZERO_BETA_RESOURCES=true.
+      # Set environment variable ARM_THREEPOINTZERO_BETA_RESOURCES=true when running Terraform.
       # Default: false
       enable-azurerm-3-beta-resources: false
     secrets:
-      # if using private terraform registries, a semicolon seperated list of  registry credentials
-      # on the format domain=token
+      # A semicolon separated list of Terraform registry credentials per domain.
+      # Format: domain1.example.com=token1;domain2.example.com=token2
+      # Default: ""
       registries: "my-registry.example.com=${{ secrets.MY_REGISTRY_TOKEN }};second.registry.example.com=${{ secret.SECOND_REGISTRY }}"
       # Must be specified to post status comments to incoming PR's.
       token: ${{ secrets.GITHUB_TOKEN }}
