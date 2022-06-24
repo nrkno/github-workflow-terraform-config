@@ -15,7 +15,7 @@ jobs:
       # Terraform version to use.
       # Default: latest
       terraform-version: latest
-      # Path to your Terraform code to check, relative to repository root.
+      # Working directory for all workflow operations, unless documented otherwise.
       # Default: .
       working-directory: .
       # Comma separated list of filepaths to delete before running Terraform.
@@ -28,6 +28,20 @@ jobs:
       # A custom message to append to the Terraform status check comment.
       # Default: ""
       status-comment-message: ""
+      # Enable scanning the repository for IaC vulnerabilities using Trivy.
+      # Default: true
+      trivy-job-enabled: true
+      # Ignore vulnerabilities that do not have a known fix.
+      # Default: true
+      trivy-ignore-unfixed: true
+      # Comma-separated list of paths to .trivyignore files.
+      # Paths are relative to the working-directory argument.
+      # https://aquasecurity.github.io/trivy/v0.29.2/docs/vulnerability/examples/filter/#by-vulnerability-ids
+      # Default: ""
+      trivy-ignore-files: .trivyignore
+      # Comma-separated list of Severity levels that should trigger errors.
+      # Default: MEDIUM,HIGH,CRITICAL
+      trivy-severity: MEDIUM,HIGH,CRITICAL
       # Define the type of machine to run the jobs on.
       # Default: self-hosted
       runs-on: ubuntu-latest

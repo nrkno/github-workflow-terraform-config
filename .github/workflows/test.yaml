@@ -10,7 +10,17 @@ jobs:
   terraform-config:
     uses: ./.github/workflows/workflow.yaml
     with:
-      working-directory: ./test
+      working-directory: ./test/terraform
+      runs-on: ubuntu-latest
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+      ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
+
+  trivy-iac-scan:
+    uses: ./.github/workflows/workflow.yaml
+    with:
+      trivy-error-is-success: true
+      working-directory: ./test/trivy
       runs-on: ubuntu-latest
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
