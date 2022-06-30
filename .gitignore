@@ -1,0 +1,2 @@
+.terraform*
+.trivy-scan-result.json
