@@ -12,6 +12,9 @@ jobs:
     name: Terraform
     uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@main
     with:
+      # Whether to enable the Terraform checks.
+      # Default: true
+      terraform-job-enabled: true
       # Terraform version to use.
       # Default: latest
       terraform-version: latest

@@ -19,6 +19,7 @@ jobs:
   trivy-iac-scan:
     uses: ./.github/workflows/workflow.yaml
     with:
+      terraform-job-enabled: false
       trivy-error-is-success: true
       working-directory: ./test/trivy
       runs-on: ubuntu-latest

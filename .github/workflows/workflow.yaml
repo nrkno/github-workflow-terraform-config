@@ -1,6 +1,9 @@
 on:
   workflow_call:
     inputs:
+      terraform-job-enabled:
+        type: boolean
+        default: true
       terraform-version:
         type: string
         default: latest
@@ -53,6 +56,7 @@ jobs:
   terraform:
     name: Config Validation in ${{ inputs.working-directory }}
     runs-on: ${{ inputs.runs-on }}
+    if: inputs.terraform-job-enabled
     steps:
       # Work-around for not being able to test if a secret has been set when
       # using `if` for conditional step execution.
