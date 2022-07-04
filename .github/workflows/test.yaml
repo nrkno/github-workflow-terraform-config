@@ -1,3 +1,5 @@
+name: Test
+
 on:
   push:
     branches:
@@ -7,7 +9,8 @@ on:
       - main
 
 jobs:
-  terraform-config:
+  # Runs both Terraform checks and Trivy scan against a valid configuration.
+  terraform-valid:
     uses: ./.github/workflows/workflow.yaml
     with:
       working-directory: ./test/terraform
@@ -16,7 +19,8 @@ jobs:
       token: ${{ secrets.GITHUB_TOKEN }}
       ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
 
-  trivy-iac-scan:
+  # Runs Trivy scan against a vulnerable config.
+  trivy-invalid:
     uses: ./.github/workflows/workflow.yaml
     with:
       terraform-job-enabled: false
