@@ -288,13 +288,14 @@ jobs:
           with open(result_filename, "r") as result_file:
               output = json.load(result_file)
               results = output.get("Results", [])
+              exit_status = 0
 
               for result in results:
                   for misconfiguration in result.get("Misconfigurations", []):
+                      # Since severity filter is set at job level, we can exit non-zero for all
+                      # errors regardless of severity and let workflow consumers decide which
+                      # severity levels to care about.
+                      exit_status = 1
                       create_output(result["Target"], misconfiguration)
 
-              # Since severity filter is set at job level, we can exit non-zero for all
-              # errors regardless of severity and let workflow consumers decide which
-              # severity levels to care about.
-              if results:
-                  sys.exit(1)
+              sys.exit(exit_status)
