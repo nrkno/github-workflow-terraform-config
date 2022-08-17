@@ -2,7 +2,7 @@
   "name": "github-workflow-terraform-config",
   "devDependencies": {
     "conventional-changelog-conventionalcommits": "^5.0.0",
-    "semantic-release": "^19.0.2",
+    "semantic-release": "^19.0.3",
     "semantic-release-tags": "^1.0.2"
   },
   "scripts": {
