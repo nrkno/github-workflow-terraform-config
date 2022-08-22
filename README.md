@@ -62,6 +62,10 @@ jobs:
       token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+## Developing
+
+The workflow definition resides in [.github/workflows/workflow.yaml](./.github/workflows/workflow.yaml).
+
 ## References
 
 - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputs
