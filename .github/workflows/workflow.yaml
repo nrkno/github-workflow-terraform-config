@@ -139,7 +139,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
 
-      - name: Check formatting (lint)
+      - name: 'Run: terraform fmt'
         id: fmt
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -149,7 +149,7 @@ jobs:
           echo "::set-output name=exit_code::${?}"
         continue-on-error: true
 
-      - name: Initialise
+      - name: 'Run: terraform init'
         id: init
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -159,7 +159,7 @@ jobs:
           echo "::set-output name=exit_code::${?}"
         continue-on-error: true
 
-      - name: Validate
+      - name: 'Run: terraform validate'
         id: validate
         shell: bash
         working-directory: ${{ inputs.working-directory }}
