@@ -71,12 +71,13 @@ jobs:
           echo "::set-output name=exit_code::${?}"
 
       # SSH agent used to checkout Terraform modules from other private repos on Github.
-      - uses: webfactory/ssh-agent@v0.5.4
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.5.4
         if: steps.ssh-agent-test.outputs.exit_code == '0'
         with:
           ssh-private-key: ${{ secrets.ssh-private-key }}
 
-      - name: Set registry secrets
+      - name: Configure secrets
         shell: bash
         env:
           REGISTRIES: "${{ secrets.registries }}"
@@ -91,7 +92,7 @@ jobs:
             echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
           done
 
-      - name: Set environment toggles
+      - name: Configure environment
         run: |
           set +ex
           if [ '${{ inputs.enable-azurerm-3-beta-resources }}' = 'true' ]; then
@@ -133,7 +134,7 @@ jobs:
               shutil.rmtree(p.name)
               print("deleted directory:", p.name)
 
-      - name: Setup
+      - name: Configure Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ inputs.terraform-version }}
@@ -191,7 +192,7 @@ jobs:
               body: body,
             });
 
-      - name: 'Job results'
+      - name: 'Determine job exit status'
         shell: python
         run: |
           import sys
@@ -219,6 +220,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Configure Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
 
       - name: Parse ignore files
         shell: python
@@ -253,10 +259,6 @@ jobs:
           scan-type: config
           severity: ${{ inputs.trivy-severity }}
           trivyignores: ${{ env.TRIVYIGNORE_PATHS }}
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
 
       - name: Parse scan results
         shell: python
