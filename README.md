@@ -42,7 +42,7 @@ jobs:
       # https://aquasecurity.github.io/trivy/v0.29.2/docs/vulnerability/examples/filter/#by-vulnerability-ids
       # Default: ""
       trivy-ignore-files: .trivyignore
-      # Generate a software bill of materials (SBOM) report the app in json format. 
+      # Generate a Software Bill Of Materials (SBOM) report the app in json format. 
       # Default: true
       trivy-sbom-enabled: true
       # Comma-separated list of Severity levels that should trigger errors.
