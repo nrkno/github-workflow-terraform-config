@@ -28,6 +28,9 @@ on:
       trivy-ignore-unfixed:
         type: boolean
         default: true
+      trivy-sbom-enabled:
+        type: boolean
+        default: true
       trivy-severity:
         type: string
         default: MEDIUM,HIGH,CRITICAL
@@ -246,15 +249,6 @@ jobs:
             with open(gh_env_file, 'a') as f:
               print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
 
-      - name: Run Trivy in GitHub SBOM mode and submit results to Dependency Snapshots
-        uses: aquasecurity/trivy-action@0.7.1
-        with:
-          scan-type: 'fs'
-          format: 'github'
-          output: 'dependency-results.sbom.json'
-          image-ref: '.'
-          github-pat: '${{ secrets.GITHUB_TOKEN }}'
-
       - name: Scan IaC code
         uses: aquasecurity/trivy-action@0.7.1
         id: trivy-scan
@@ -310,3 +304,19 @@ jobs:
                       create_output(result["Target"], misconfiguration)
 
               sys.exit(exit_status)
+
+  trivy-sbom:
+    name: Generate SBOM report of application in ${{ inputs.working-directory }}
+    runs-on: ${{ inputs.runs-on }}
+    if: inputs.trivy-sbom-enabled
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run Trivy in GitHub SBOM mode and submit results to Dependency Snapshots
+        uses: aquasecurity/trivy-action@0.7.1
+        with:
+          scan-type: 'fs'
+          format: 'github'
+          output: 'dependency-results.sbom.json'
+          image-ref: '.'
+          github-pat: '${{ secrets.GITHUB_TOKEN }}'
