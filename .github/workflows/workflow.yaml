@@ -306,13 +306,13 @@ jobs:
               sys.exit(exit_status)
 
   trivy-sbom:
-    name: Generate SBOM report of application in ${{ inputs.working-directory }}
+    name: Generate SBOM in ${{ inputs.working-directory }}
     runs-on: ${{ inputs.runs-on }}
     if: inputs.trivy-sbom-enabled
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Run Trivy in GitHub SBOM mode and submit results to Dependency Snapshots
+      - name: Submit SBOM results to Dependency Snapshots
         uses: aquasecurity/trivy-action@0.7.1
         with:
           scan-type: 'fs'
