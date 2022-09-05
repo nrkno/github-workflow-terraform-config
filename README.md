@@ -43,8 +43,8 @@ jobs:
       # Default: ""
       trivy-ignore-files: .trivyignore
       # Generate a Software Bill Of Materials (SBOM) report in table format. 
-      # Default: true
-      trivy-sbom-enabled: true
+      # Default: false
+      trivy-sbom-enabled: false
       # Comma-separated list of Severity levels that should trigger errors.
       # Default: MEDIUM,HIGH,CRITICAL
       trivy-severity: MEDIUM,HIGH,CRITICAL
