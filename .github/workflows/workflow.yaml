@@ -30,7 +30,7 @@ on:
         default: true
       trivy-sbom-enabled:
         type: boolean
-        default: true
+        default: false
       trivy-severity:
         type: string
         default: MEDIUM,HIGH,CRITICAL
