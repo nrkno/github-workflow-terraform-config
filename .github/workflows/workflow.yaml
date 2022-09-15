@@ -40,6 +40,24 @@ on:
       trivy-error-is-success:
         type: boolean
         default: false
+      terraform-docs-job-enabled:
+        type: boolean
+        default: true
+      terraform-docs-config-file:
+        type: string
+        default: .terraform-docs.yaml
+      terraform-docs-output-file:
+        type: string
+        default: README.md
+      terraform-docs-output-method:
+        type: string
+        default: inject
+      terraform-docs-git-commit-message:
+        type: string
+        default: "docs: terraform-docs automated update"
+      terraform-docs-git-push:
+        type: boolean
+        default: true
 
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
@@ -320,3 +338,21 @@ jobs:
           output: 'dependency-results.sbom.json'
           image-ref: '.'
           github-pat: '${{ secrets.GITHUB_TOKEN }}'
+
+  terraform-docs:
+    name: Render terraform docs in ${{ inputs.working-directory }}
+    runs-on: ${{ inputs.runs-on }}
+    if: inputs.terraform-docs-job-enabled
+    needs: [terraform]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Render terraform docs and push
+        uses: terraform-docs/gh-actions@main
+        with:
+          find-dir: ${{ inputs.working-directory }}
+          config-file: ${{ inputs.terraform-docs-job-enabled }}
+          output-file: ${{ inputs.terraform-docs-config-file }}
+          output-method: ${{ inputs.terraform-docs-output-file }}
+          git-commit-message: ${{ inputs.terraform-docs-output-method }}
+          git-push: ${{ inputs.terraform-docs-git-push }}
