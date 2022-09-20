@@ -342,7 +342,7 @@ jobs:
   terraform-docs:
     name: Render terraform docs in ${{ inputs.working-directory }}
     runs-on: ${{ inputs.runs-on }}
-    if: inputs.terraform-docs-job-enabled
+    if: inputs.terraform-docs-job-enabled && github.event_name == 'push'
     needs: [terraform]
     steps:
       - name: Checkout
@@ -363,7 +363,7 @@ jobs:
         with:
           repository: nrkno/github-workflow-terraform-config
           ref: ${{ needs.setup.outputs.workflow_tag }}
-          path: ${{ env.GITHUB_WORKSPACE }}/../.github-workflow-terraform-config
+          path: ${{ env.GITHUB_WORKSPACE }}/.github-workflow-terraform-config
       - name: Set configuration
         id: set_config
         shell: bash
@@ -374,11 +374,10 @@ jobs:
             echo "::set-output name=terraformdocsconfig::.terraform-docs.yaml"
           else
             echo "Using workflow configuration for commitlint"
-            echo "::set-output name=terraformdocsconfig::$GITHUB_WORKSPACE/../.github-workflow-terraform-config/.terraform-docs.yaml"
+            echo "::set-output name=terraformdocsconfig::$GITHUB_WORKSPACE/.github-workflow-terraform-config/.terraform-docs.yaml"
           fi
       - name: Render terraform docs and push
         uses: terraform-docs/gh-actions@v1.0.0
-        if: ${{ github.event_name == 'push' }}
         with:
           working-dir: ${{ inputs.working-directory }}
           config-file: ${{ steps.set_config.outputs.terraformdocsconfig }}
