@@ -347,12 +347,41 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Get workflow ref
+        id: workflow_tag
+        shell: bash
+        run: |
+          workflow_file="${GITHUB_WORKFLOW}"
+          if ! [ -f "${workflow_file}" ]
+          then
+            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
+          fi
+          workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
+          echo "::set-output name=workflow_tag::${workflow_tag}"
+      - name: Checkout workflow
+        uses: actions/checkout@v3
+        with:
+          repository: nrkno/github-workflow-terraform-config
+          ref: ${{ needs.setup.outputs.workflow_tag }}
+          path: .github-workflow-terraform-config
+      - name: Set configuration
+        id: set_config
+        shell: bash
+        run: |
+          if [ -f ".terraform-docs.yaml" ]
+          then
+            echo "Using callers configuration for commitlint"
+            echo "::set-output name=terraformdocsconfig::.terraform-docs.yaml"
+          else
+            echo "Using workflow configuration for commitlint"
+            echo "::set-output name=terraformdocsconfig::.github-workflow-terraform-config/.terraform-docs.yaml"
+          fi
       - name: Render terraform docs and push
-        uses: terraform-docs/gh-actions@main
+        uses: terraform-docs/gh-actions@v1.0.0
         with:
           find-dir: ${{ inputs.working-directory }}
-          config-file: ${{ inputs.terraform-docs-job-enabled }}
-          output-file: ${{ inputs.terraform-docs-config-file }}
-          output-method: ${{ inputs.terraform-docs-output-file }}
-          git-commit-message: ${{ inputs.terraform-docs-output-method }}
+          config-file: ${{ steps.set_config.outputs.terraformdocsconfig }}
+          output-file: ${{ inputs.terraform-docs-output-file }}
+          output-method: ${{ inputs.terraform-docs-output-method }}
+          git-commit-message: ${{ inputs.terraform-docs-git-commit-message }}
           git-push: ${{ inputs.terraform-docs-git-push }}
