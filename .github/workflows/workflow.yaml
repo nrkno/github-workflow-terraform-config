@@ -378,6 +378,7 @@ jobs:
           fi
       - name: Render terraform docs and push
         uses: terraform-docs/gh-actions@v1.0.0
+        if: ${{ github.event_name == 'push' }}
         with:
           find-dir: ${{ inputs.working-directory }}
           config-file: ${{ steps.set_config.outputs.terraformdocsconfig }}
