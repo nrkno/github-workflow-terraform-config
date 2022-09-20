@@ -354,11 +354,13 @@ jobs:
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
+        env:
+          REPO_NAME: ${{ needs.get_repo.outputs.REPO_NAME }}
         run: |
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
-            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
+            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" ${GITHUB_WORKSPACE}${REPO_NAME}/.github/workflows/*)"
           fi
           workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
           echo "::set-output name=workflow_tag::${workflow_tag}"
