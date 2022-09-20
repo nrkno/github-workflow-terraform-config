@@ -351,6 +351,10 @@ jobs:
         run: |
           REPO=$(echo ${GITHUB_REPOSITORY} | awk -F'/' '{print $2}')
           echo "::set-output name=REPO_NAME::${REPO}"
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: ${{ env.GITHUB_WORKSPACE }}${{ needs.get_repo.outputs.REPO_NAME }}
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
@@ -364,10 +368,6 @@ jobs:
           fi
           workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
           echo "::set-output name=workflow_tag::${workflow_tag}"
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          path: ${{ env.GITHUB_WORKSPACE }}${{ needs.get_repo.outputs.REPO_NAME }}
       - name: Checkout workflow
         uses: actions/checkout@v3
         with:
