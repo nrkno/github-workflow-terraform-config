@@ -54,6 +54,27 @@ jobs:
       # Set environment variable ARM_THREEPOINTZERO_BETA_RESOURCES=true when running Terraform.
       # Default: false
       enable-azurerm-3-beta-resources: false
+      # Enable job to automaticly create terraform doc from terraform-code
+      # More documentation can be found here: https://github.com/terraform-docs/gh-actions#configuration
+      # default: true
+      terraform-docs-job-enabled:
+      # Set path and filename of terraform-docs config file.
+      # If no file pressent in action-repo, it will get configfile from this repo
+      # More documentation can be found here: https://terraform-docs.io/user-guide/configuration/
+      # Default: .terraform-docs.yaml
+      terraform-docs-config-file:
+      # Which file to output the rendered result
+      # Default: README.md
+      terraform-docs-output-file:
+      # How to inject result
+      # Default: inject
+      terraform-docs-output-method:
+      # What message this step should commit it changes to output-file with
+      # Default: "docs: terraform-docs automated update"
+      terraform-docs-git-commit-message:
+      # To enable this step to push its changes to working-branch
+      # Default: true
+      terraform-docs-git-push:
     secrets:
       # A semicolon separated list of Terraform registry credentials per domain.
       # Format: domain1.example.com=token1;domain2.example.com=token2
