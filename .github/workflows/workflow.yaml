@@ -344,6 +344,7 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     if: inputs.terraform-docs-job-enabled && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
     needs: [terraform]
+    concurrency: terraform-docs
     steps:
       - name: Checkout
         uses: actions/checkout@v3
