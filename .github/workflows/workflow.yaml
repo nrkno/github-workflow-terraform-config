@@ -342,31 +342,20 @@ jobs:
   terraform-docs:
     name: Render terraform docs in ${{ inputs.working-directory }}
     runs-on: ${{ inputs.runs-on }}
-    if: inputs.terraform-docs-job-enabled && github.event_name == 'push'
+    if: inputs.terraform-docs-job-enabled && !contains('refs/heads/main', github.ref)
     needs: [terraform]
     steps:
-      - name: Get repo
-        id: get_repo
-        shell: bash
-        run: |
-          REPO=$(echo ${GITHUB_REPOSITORY} | awk -F'/' '{print $2}')
-          echo "::set-output name=REPO_NAME::${REPO}"
-      
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          path: ${{ env.GITHUB_WORKSPACE }}${{ needs.get_repo.outputs.REPO_NAME }}
       
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
-        env:
-          REPO_NAME: ${{ needs.get_repo.outputs.REPO_NAME }}
         run: |
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
-            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" ${GITHUB_WORKSPACE}${REPO_NAME}/.github/workflows/*)"
+            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
           fi
           workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
           echo "::set-output name=workflow_tag::${workflow_tag}"
@@ -376,30 +365,35 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: nrkno/github-workflow-terraform-config
-          ref: ${{ needs.setup.outputs.workflow_tag }}
-          path: ${{ env.GITHUB_WORKSPACE }}/.github-workflow-terraform-config
+          ref: ${{ steps.workflow_tag.outputs.workflow_tag }}
+          path: .github-workflow-terraform-config/
+
+      - name: Move github-workflow-terraform-config
+        id: move_terraform_workflow
+        if: steps.checkout_workflow.outcome == 'success'
+        shell: bash
+        run: |
+          mv .github-workflow-terraform-config ../.github-workflow-terraform-config
       
       - name: Set configuration
         id: set_config
-        if: steps.checkout_workflow.outcome == 'success'
+        if: steps.checkout_workflow.outcome == 'success' && steps.move_terraform_workflow.outcome == 'success'
         shell: bash
-        env:
-          REPO_NAME: ${{ needs.get_repo.outputs.REPO_NAME }}
         run: |
-          if [ -f "${GITHUB_WORKSPACE}${REPO_NAME}/.terraform-docs.yaml" ]
+          if [ -f ".terraform-docs.yaml" ]
           then
             echo "Using callers configuration for commitlint"
-            echo "::set-output name=terraformdocsconfig::${GITHUB_WORKSPACE}${REPO_NAME}/.terraform-docs.yaml"
+            echo "::set-output name=terraformdocsconfig::.terraform-docs.yaml"
           else
             echo "Using workflow configuration for commitlint"
-            echo "::set-output name=terraformdocsconfig::${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml"
+            echo "::set-output name=terraformdocsconfig::../.github-workflow-terraform-config/.terraform-docs.yaml"
           fi
       
       - name: Render terraform docs and push
         uses: terraform-docs/gh-actions@v1.0.0
         if: steps.set_config.outcome == 'success'
         with:
-          find-dir: ${{ env.GITHUB_WORKSPACE }}/${{ needs.get_repo.outputs.REPO_NAME }}/
+          find-dir: ${{ inputs.working-directory }}
           config-file: ${{ steps.set_config.outputs.terraformdocsconfig }}
           output-file: ${{ inputs.terraform-docs-output-file }}
           output-method: ${{ inputs.terraform-docs-output-method }}
