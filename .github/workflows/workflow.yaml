@@ -381,14 +381,14 @@ jobs:
         id: set_config
         shell: bash
         env:
-          SOURCE_PATH: ${{ env.GITHUB_WORKSPACE }}/source/${{ inputs.working-directory }}
+          CONFIG_FILE: ${{ inputs.terraform-docs-config-file }}
         run: |
-          if [ -f "source/.terraform-docs.yaml" ]
+          if [ -f "$CONFIG_FILE" ]
           then
             echo "Using callers configuration for commitlint"
           else
             echo "Using workflow configuration for commitlint"
-            cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" .terraform-docs.yaml
+            cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" "$CONFIG_FILE"
           fi
       - name: Remove workflow checkout
         shell: bash
@@ -398,7 +398,7 @@ jobs:
         uses: terraform-docs/gh-actions@v1.0.0
         with:
           working-dir: ${{ inputs.working-directory }}
-          config-file: .terraform-docs.yaml
+          config-file: ${{ inputs.terraform-docs-config-file }}
           output-file: ${{ inputs.terraform-docs-output-file }}
           output-method: ${{ inputs.terraform-docs-output-method }}
           git-commit-message: ${{ inputs.terraform-docs-git-commit-message }}
