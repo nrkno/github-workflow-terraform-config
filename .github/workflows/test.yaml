@@ -14,6 +14,7 @@ jobs:
     with:
       working-directory: ./test/terraform
       runs-on: ubuntu-latest
+      terraform-docs-fail-on-diff: false
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
       ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}

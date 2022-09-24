@@ -60,7 +60,7 @@ on:
         default: true
       terraform-docs-fail-on-diff:
         type: boolean
-        default: false
+        default: true
       terraform-docs-recursive:
         type: boolean
         default: false

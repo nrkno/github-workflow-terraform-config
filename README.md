@@ -78,7 +78,7 @@ jobs:
       terraform-docs-git-push: true
       # to fail when there are documentation changes
       # Default: false
-      terraform-docs-fail-on-diff: false
+      terraform-docs-fail-on-diff: true
       # If true it will update submodules recursively in the directory modules under working directory
       # Default: false
       terraform-docs-recursive: false
@@ -93,9 +93,30 @@ jobs:
       # trigger workflows, the push needs to be done using ssh key
       # See https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs
       # for more information
-      ssh-private-key-docs-push: ${{ secret.SSH_KEY_DOCS_PUSH }}
+      ssh-private-key-docs-push: ${{ secret.SSH_KEY_TERRAFORM_DOCS }}
       # Must be specified to post status comments to incoming PR's.
       token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+## Setting up automatic push of terraform documentation updates
+
+In order to get updates of terraform documentation to trigger new workflows, the
+git push must be done using a ssh deploy key and not the build in github token.
+You first need to generate a new ssh key pair and add build secrets:
+```bash
+ssh-keygen -f id_ed25519 -t ed25519 -N "" -C "terraform-docs"
+gh repo deploy-key add -w -t "terraform docs push" id_ed25519.pub
+gh secret set SSH_KEY_TERRAFORM_DOCS -b "$(cat id_ed25519)"
+gh secret set SSH_KEY_TERRAFORM_DOCS -b "$(cat id_ed25519)" --app dependabot
+shred -u id_ed25519*
+```
+Then change inputs for the workflow and set
+```yaml
+    with:
+      ...
+      terraform-docs-fail-on-diff: false
+    secrets:
+      ssh-private-key-docs-push: ${{ secret.SSH_KEY_TERRAFORM_DOCS }}
 ```
 
 ## Developing
