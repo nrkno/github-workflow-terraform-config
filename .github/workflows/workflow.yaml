@@ -61,6 +61,9 @@ on:
       terraform-docs-fail-on-diff:
         type: boolean
         default: false
+      terraform-docs-recursive:
+        type: boolean
+        default: false
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
       enable-azurerm-3-beta-resources:
@@ -426,6 +429,7 @@ jobs:
           working-dir: ${{ inputs.working-directory }}
           config-file: ${{ inputs.terraform-docs-config-file }}
           fail-on-diff: ${{ inputs.terraform-docs-fail-on-diff }}
+          recursive: ${{ inputs.terraform-docs-recursive }}
           output-file: ${{ inputs.terraform-docs-output-file }}
           output-method: ${{ inputs.terraform-docs-output-method }}
           git-push: false
