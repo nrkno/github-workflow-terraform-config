@@ -79,6 +79,9 @@ jobs:
       # to fail when there are documentation changes
       # Default: false
       terraform-docs-fail-on-diff: false
+      # If true it will update submodules recursively in the directory modules under working directory
+      # Default: false
+      terraform-docs-recursive: false
     secrets:
       # A semicolon separated list of Terraform registry credentials per domain.
       # Format: domain1.example.com=token1;domain2.example.com=token2
