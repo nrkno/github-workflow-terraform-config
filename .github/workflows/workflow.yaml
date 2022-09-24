@@ -58,7 +58,9 @@ on:
       terraform-docs-git-push:
         type: boolean
         default: true
-
+      terraform-docs-fail-on-diff:
+        type: boolean
+        default: false
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
       enable-azurerm-3-beta-resources:
@@ -69,6 +71,8 @@ on:
         required: false
       ssh-private-key:
         required: true
+      ssh-private-key-docs-push:
+        required: false
       token:
         required: true
 
@@ -355,8 +359,28 @@ jobs:
     needs: [terraform]
     concurrency: terraform-docs
     steps:
+      - name: Check ssh key for checkout and push
+        id: ssh_key_check
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: "${{ secrets.ssh-private-key-docs-push }}"
+        run: |
+          set +e
+          if test -n "${SSH_PRIVATE_KEY}"
+          then
+            echo "::set-output name=has_ssh_key::yes"
+          else
+            echo "::set-output name=has_ssh_key::no"
+          fi
       - name: Checkout
         uses: actions/checkout@v3
+        if: ${{ steps.ssh_key_check.outputs.has_ssh_key == 'yes' }}
+        with:
+          ref: "${{ github.head_ref }}"
+          ssh-key: "${{ secrets.ssh-private-key-docs-push }}"
+      - name: Checkout
+        uses: actions/checkout@v3
+        if: ${{ steps.ssh_key_check.outputs.has_ssh_key  != 'yes' }}
         with:
           ref: "${{ github.head_ref }}"
       - name: Checkout workflow
@@ -390,6 +414,8 @@ jobs:
             echo "Using workflow configuration for commitlint"
             cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" "$CONFIG_FILE"
           fi
+          # workaround for terraform docs trigger happy git add
+          echo "$CONFIG_FILE" >> .gitignore
       - name: Remove workflow checkout
         shell: bash
         run: |
@@ -399,7 +425,27 @@ jobs:
         with:
           working-dir: ${{ inputs.working-directory }}
           config-file: ${{ inputs.terraform-docs-config-file }}
+          fail-on-diff: ${{ inputs.terraform-docs-fail-on-diff }}
           output-file: ${{ inputs.terraform-docs-output-file }}
           output-method: ${{ inputs.terraform-docs-output-method }}
-          git-commit-message: ${{ inputs.terraform-docs-git-commit-message }}
-          git-push: ${{ inputs.terraform-docs-git-push }}
+          git-push: false
+      - name: Commit doc updates
+        if: ${{ steps.ssh_key_check.outputs.has_ssh_key == 'yes' && inputs.terraform-docs-git-push }}
+        shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ inputs.terraform-docs-git-commit-message }}
+        run: |
+          # restore gitignore workaround
+          git checkout .gitignore
+          if [ $(git status --porcelain | grep -c -E '*.\.md$') -eq 0 ]
+          then
+            echo "No changes to .md files"
+            exit 0
+          fi
+          # sometimes cleanup fails, workaround
+          sudo chown -R -- $(id -u) .git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add $(git status --porcelain | awk '/.*\.md$/ { print $2 }')
+          git commit -m "$COMMIT_MESSAGE"
+          git push
