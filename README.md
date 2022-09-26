@@ -10,7 +10,7 @@ Reference this repository for a workflow job.
 jobs:
   terraform:
     name: Terraform
-    uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v1
+    uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
     with:
       # Whether to enable the Terraform checks.
       # Default: true
