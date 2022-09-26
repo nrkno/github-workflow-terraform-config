@@ -418,6 +418,7 @@ jobs:
             cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" "$CONFIG_FILE"
           fi
           # workaround for terraform docs trigger happy git add
+          echo >> .gitignore
           echo "$CONFIG_FILE" >> .gitignore
       - name: Remove workflow checkout
         shell: bash
