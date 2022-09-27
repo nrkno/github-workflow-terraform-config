@@ -116,7 +116,7 @@ Then change inputs for the workflow and set
       ...
       terraform-docs-fail-on-diff: false
     secrets:
-      ssh-private-key-docs-push: ${{ secret.SSH_KEY_TERRAFORM_DOCS }}
+      ssh-private-key-docs-push: ${{ secrets.SSH_KEY_TERRAFORM_DOCS }}
 ```
 
 ## Developing
