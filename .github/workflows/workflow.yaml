@@ -444,7 +444,7 @@ jobs:
         env:
           COMMIT_MESSAGE: ${{ inputs.terraform-docs-git-commit-message }}
         run: |
-          if git status --porcelain |grep -E 'A[[:space:]]+.terraform-docs.ya?ml'
+          if git status --porcelain |grep -E 'A[[:space:]]+.terraform-docs.yam?l'
           then
             git restore --stage .terraform-docs.*
           fi
