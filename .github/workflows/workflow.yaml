@@ -424,9 +424,6 @@ jobs:
             echo "Using workflow configuration for commitlint"
             cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" "$CONFIG_FILE"
           fi
-          # workaround for terraform docs trigger happy git add
-          echo >> .gitignore
-          echo "$CONFIG_FILE" >> .gitignore
       - name: Remove workflow checkout
         shell: bash
         run: |
@@ -447,8 +444,10 @@ jobs:
         env:
           COMMIT_MESSAGE: ${{ inputs.terraform-docs-git-commit-message }}
         run: |
-          # restore gitignore workaround
-          git checkout .gitignore
+          if git status --porcelain |grep -E 'A[[:space:]]+.terraform-docs.ya?ml'
+          then
+            git restore --stage .terraform-docs.*
+          fi
           if [ $(git status --porcelain | grep -c -E '*.\.md$') -eq 0 ]
           then
             echo "No changes to .md files"
