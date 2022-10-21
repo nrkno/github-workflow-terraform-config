@@ -198,7 +198,7 @@ jobs:
         # workaround for https://github.com/hashicorp/terraform/issues/28490
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.16.15'
+          go-version: '1.18.1'
       - name: 'Run terraform configuration aliases'
         uses: bendrucker/terraform-configuration-aliases-action@v1
         with:
