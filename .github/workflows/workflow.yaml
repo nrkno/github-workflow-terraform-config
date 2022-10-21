@@ -195,15 +195,6 @@ jobs:
           echo "::set-output name=exit_code::${?}"
         continue-on-error: true
 
-        # workaround for https://github.com/hashicorp/terraform/issues/28490
-      - uses: actions/setup-go@v3
-        with:
-          go-version: '1.16.15'
-      - name: 'Run terraform configuration aliases'
-        uses: bendrucker/terraform-configuration-aliases-action@v1
-        with:
-          path: ${{ inputs.working-directory }}
-
       - name: 'Run: terraform validate'
         id: validate
         shell: bash
