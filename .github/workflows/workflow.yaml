@@ -96,7 +96,7 @@ jobs:
         run: |
           set +e
           test -n "${SSH_PRIVATE_KEY}"
-          echo "::set-output name=exit_code::${?}"
+          echo "exit_code=${?}" >> $GITHUB_OUTPUT
 
       # SSH agent used to checkout Terraform modules from other private repos on Github.
       - name: Setup SSH agent
@@ -182,7 +182,7 @@ jobs:
         run: |
           set +e
           terraform fmt -check -recursive -list=true
-          echo "::set-output name=exit_code::${?}"
+          echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: 'Run: terraform init'
@@ -192,7 +192,7 @@ jobs:
         run: |
           set +e
           terraform init -no-color
-          echo "::set-output name=exit_code::${?}"
+          echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
         # workaround for https://github.com/hashicorp/terraform/issues/28490
@@ -211,7 +211,7 @@ jobs:
         run: |
           set +e
           terraform validate -no-color
-          echo "::set-output name=exit_code::${?}"
+          echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Post results as comment
@@ -378,9 +378,9 @@ jobs:
           set +e
           if test -n "${SSH_PRIVATE_KEY}"
           then
-            echo "::set-output name=has_ssh_key::yes"
+            echo "has_ssh_key=yes" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=has_ssh_key::no"
+            echo "has_ssh_key=no" >> $GITHUB_OUTPUT
           fi
       - name: Checkout
         uses: actions/checkout@v3
@@ -410,7 +410,7 @@ jobs:
             workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
           fi
           workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
-          echo "::set-output name=workflow_tag::${workflow_tag}"
+          echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
       - name: Set configuration
         id: set_config
         shell: bash
