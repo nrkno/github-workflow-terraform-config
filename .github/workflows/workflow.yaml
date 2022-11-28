@@ -200,7 +200,7 @@ jobs:
         with:
           go-version: '1.16.15'
       - name: 'Run terraform configuration aliases'
-        uses: bendrucker/terraform-configuration-aliases-action@v1.2.1
+        uses: bendrucker/terraform-configuration-aliases-action@v1.3.0
         with:
           path: ${{ inputs.working-directory }}
 
