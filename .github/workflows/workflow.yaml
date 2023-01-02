@@ -131,10 +131,7 @@ jobs:
         uses: actions/checkout@v3
 
       # Delete ignored files inside repo before running Terraform.
-      # This is useful e.g. if the repository has configured a Terraform
-      # backend that should not be used when simply validating the
-      # configuration. Care is taken to prevent deletion of files outside
-      # of the repository root.
+      # It should not be possible to delete files outside of the repository root.
       - name: Remove ignored files
         if: inputs.ignore-files != ''
         env:
@@ -191,7 +188,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: |
           set +e
-          terraform init -no-color
+          terraform init -no-color -backend=false
           echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
