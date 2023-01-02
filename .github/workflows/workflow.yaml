@@ -2,71 +2,93 @@ on:
   workflow_call:
     inputs:
       terraform-job-enabled:
+        description: Enable the Terraform checks
         type: boolean
         default: true
       terraform-version:
+        description: Version of Terraform to use
         type: string
         default: latest
       working-directory:
+        description: Working directory for all workflow operations, unless documented otherwise.
         type: string
         default: .
       ignore-files:
+        description: Comma-separated list of filepaths to delete before running Terraform. This is relative to the working-directory argument.
         type: string
         default: ""
       status-comment-enabled:
+        description: Post a status comment in the pull request issue after checks have completed.
         type: boolean
         default: true
       status-comment-message:
+        description: A custom message to append to the status comment.
         type: string
         default: ""
       runs-on:
+        description: Defines the type of machine to run the jobs on.
         type: string
         default: self-hosted
       trivy-job-enabled:
+        description:  Scan repository for IaC vulnerabilities using Trivy.
         type: boolean
         default: true
       trivy-ignore-unfixed:
+        description:  Ignore vulnerabilities that do not have a known fix.
         type: boolean
         default: true
       trivy-sbom-enabled:
+        description:  Generate a Software Bill of Materials (SBOM) report.
         type: boolean
         default: false
       trivy-severity:
+        description: Comma-separated list of severity levels that should trigger errors.
         type: string
         default: MEDIUM,HIGH,CRITICAL
       trivy-ignore-files:
+        description:  Comma-separated list of paths to .trivyignore files. Paths are relative to the working-directory argument.
         type: string
         default: ""
       trivy-error-is-success:
+        description: "Internal: Return successfully only if Trivy finds vulnerabilities."
         type: boolean
         default: false
       terraform-docs-job-enabled:
+        description: Automatically update Terraform documentation. https://github.com/terraform-docs/gh-actions#configuration
         type: boolean
         default: true
       terraform-docs-config-file:
+        description: Path to a Terraform docs configuration file.
         type: string
         default: .terraform-docs.yaml
       terraform-docs-output-file:
+        description: Path to the file to update the documentation in.
         type: string
         default: README.md
       terraform-docs-output-method:
+        description: Method to use for injecting the documentation.
         type: string
         default: inject
       terraform-docs-git-commit-message:
+        description: Message for the documentation commit.
         type: string
         default: "docs: terraform-docs automated update"
       terraform-docs-git-push:
+        description: Automatically push the commit to the pull request branch.
         type: boolean
         default: true
       terraform-docs-fail-on-diff:
+        description: "Internal: Fail if there are changes in the documentation."
         type: boolean
         default: true
       terraform-docs-recursive:
+        description: Generate documentation recursively for all modules in the working directory.
         type: boolean
         default: false
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
       enable-azurerm-3-beta-resources:
+        description: "Set the environment variable `ARM_THREEPOINTZERO_BETA_RESOURCES=true` when running the Terraform CLI."
         type: boolean
         default: false
     secrets:
@@ -103,7 +125,7 @@ jobs:
         uses: webfactory/ssh-agent@v0.7.0
         if: steps.ssh-agent-test.outputs.exit_code == '0'
         with:
-          ssh-private-key: ${{ secrets.ssh-private-key }}
+          ssh-private-key: ${{ secrets.SSH_KEY_AUTODOC }}
 
       - name: Configure secrets
         shell: bash
