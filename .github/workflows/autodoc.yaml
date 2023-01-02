@@ -1,0 +1,49 @@
+on:
+  pull_request:
+    branches:
+      - main
+
+name: Autodoc
+jobs:
+  autodoc:
+    name: Update workflow documentation
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
+      -
+        name: Configure Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      -
+        name: Install dependencies
+        run: |
+          python -m pip install -U pyyaml
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          ssh-key: "${{ secrets.SSH_KEY_AUTODOC }}"
+      -
+        name: Update documentation
+        run: |
+          python .github/scripts/autodoc.py .github/workflows/workflow.yaml README.md
+
+          # Exit early if no changes were made
+          if [[ -z "$(git status --porcelain README.md)" ]]
+          then
+            echo "Nothing to do!"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: update readme with autodoc"
+          git push

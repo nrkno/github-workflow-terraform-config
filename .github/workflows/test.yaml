@@ -1,11 +1,13 @@
 name: Test
 
 on:
-  push:
-    branches:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+
+
 
 jobs:
   # Runs both Terraform checks and Trivy scan against a valid configuration.
