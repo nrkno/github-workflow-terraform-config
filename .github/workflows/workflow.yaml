@@ -423,6 +423,7 @@ jobs:
         id: workflow_tag
         shell: bash
         run: |
+          set -x
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
