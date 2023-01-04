@@ -17,6 +17,7 @@ jobs:
       working-directory: ./test/terraform
       runs-on: ubuntu-latest
       terraform-docs-fail-on-diff: false
+      workflow-ref: "${{ github.sha }}"
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
       ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
@@ -29,6 +30,7 @@ jobs:
       trivy-error-is-success: true
       working-directory: ./test/trivy
       runs-on: ubuntu-latest
+      workflow-ref: "${{ github.sha }}"
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
       ssh-private-key: ${{ secrets.SSH_KEY_GITHUB_ACTIONS }}
