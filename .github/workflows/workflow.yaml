@@ -424,7 +424,7 @@ jobs:
           then
             workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
           fi
-          workflow_tag="$(~/.local/bin/yq -r ".jobs[\"${GITHUB_JOB}\"].uses" < "${workflow_file}"| cut -d@ -f2)"
+          workflow_tag="$(~/.local/bin/yq -r ".jobs[].uses" < "${workflow_file}"| cut -d@ -f2 | head -1)"
           echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
       - name: Checkout workflow
