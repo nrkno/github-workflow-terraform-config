@@ -431,6 +431,8 @@ jobs:
           fi
           workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
           echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
+          echo "### output file"
+          cat $GITHUB_OUTPUT
       - name: Set configuration
         id: set_config
         shell: bash
