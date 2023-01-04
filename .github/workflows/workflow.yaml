@@ -419,16 +419,18 @@ jobs:
           repository: nrkno/github-workflow-terraform-config
           ref: ${{ needs.setup.outputs.workflow_tag }}
           path: .github-workflow-terraform-config
+      - uses: actions/setup-python@v4
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
         run: |
+          pip3 install yq
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
             workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
           fi
-          workflow_tag="$(awk -F @ '/github-workflow-terraform-config/ {print $2}' "${workflow_file}")"
+          workflow_tag="$(~/.local/bin/yq -r ".jobs[\"${GITHUB_JOB}\"].uses" < "${workflow_file}"| cut -d@ -f2)"
           echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
       - name: Set configuration
         id: set_config
