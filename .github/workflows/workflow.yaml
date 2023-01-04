@@ -125,7 +125,7 @@ jobs:
         uses: webfactory/ssh-agent@v0.7.0
         if: steps.ssh-agent-test.outputs.exit_code == '0'
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY_AUTODOC }}
+          ssh-private-key: ${{ secrets.ssh-private-key }}
 
       - name: Configure secrets
         shell: bash
