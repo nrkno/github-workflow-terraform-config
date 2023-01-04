@@ -287,7 +287,7 @@ jobs:
       - name: Configure Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.9
+          python-version: 3.11
 
       - name: Parse ignore files
         shell: python
@@ -326,44 +326,55 @@ jobs:
       - name: Parse scan results
         shell: python
         env:
-          RESULT_FILENAME: .trivy-scan-result.json
+          REPORT_FILENAME: .trivy-scan-result.json
         continue-on-error: ${{ inputs.trivy-error-is-success }}
         run: |
           import json
           import os
           import sys
 
-          result_filename = os.getenv("RESULT_FILENAME")
 
+          def format_item(*, filename, error):
+              """
+              Returns a string representing the error, formatted in such a way that
+              GitHub will annotate the workflow run based on the severity of the error.
+              """
+              id = error.get("ID", "-1")
+              title = error.get("Title", "<no title>")
+              description = error.get("Description", "<no description>")
+              message = error.get("Message", "")
+              severity = error.get("Severity", "?")
+              resolution = error.get("Resolution", "<no resolution>")
+              start_line = error.get("CauseMetadata", {}).get("StartLine", "-1")
+              end_line = error.get("CauseMetadata", {}).get("EndLine", "-1")
 
-          def create_output(filename, error):
-              severity = "warning"
-              if error["Severity"] in ("HIGH", "CRITICAL"):
-                  severity = "error"
-              message = f"{error['ID']}: {error['Title']}%0A{error['Description']}%0A{error['Message']}%0AResolution: {error['Resolution']}%0A"
-              for reference in error["References"]:
+              message = f"{id}: {title}%0A{description}%0A{message}%0AResolution: {resolution}%0A"
+              for reference in error.get("References", []):
                   message += f"%0A{reference}"
-              start_line = error["CauseMetadata"]["StartLine"]
-              end_line = error["CauseMetadata"]["EndLine"]
-              print(
-                  f"::{severity} file={filename},line={start_line},endLine={end_line}::{message}"
-              )
+
+              gh_severity = "warning"
+              if severity.upper() in ("HIGH", "CRITICAL"):
+                  gh_severity = "error"
+
+              return f"::{gh_severity} file={filename},line={start_line},endLine={end_line}::{message}"
 
 
-          with open(result_filename, "r") as result_file:
-              output = json.load(result_file)
-              results = output.get("Results", [])
-              exit_status = 0
+          with open(os.environ["REPORT_FILENAME"], "r") as f:
+              report = json.load(f)
+          print("Raw report:", json.dumps(report, indent=2))
 
-              for result in results:
-                  for misconfiguration in result.get("Misconfigurations", []):
-                      # Since severity filter is set at job level, we can exit non-zero for all
-                      # errors regardless of severity and let workflow consumers decide which
-                      # severity levels to care about.
-                      exit_status = 1
-                      create_output(result["Target"], misconfiguration)
+          exit_status = 0
+          for res in report.get("Results", []):
+              filename = res.get("Target", "<no filename>")
+              for err in res.get("Misconfigurations", []):
+                  print(format_item(filename=filename, error=err))
 
-              sys.exit(exit_status)
+                  # Since severity filter is set at job level, we can exit non-zero for all
+                  # errors regardless of severity and let workflow consumers decide which
+                  # severity levels to care about.
+                  exit_status = 1
+
+          sys.exit(exit_status)
 
   trivy-sbom:
     name: Generate SBOM in ${{ inputs.working-directory }}
