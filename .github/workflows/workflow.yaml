@@ -417,7 +417,6 @@ jobs:
         id: workflow_tag
         shell: bash
         run: |
-          set -x
           pip3 install yq
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
