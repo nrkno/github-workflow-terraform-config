@@ -412,18 +412,12 @@ jobs:
         if: ${{ steps.ssh_key_check.outputs.has_ssh_key  != 'yes' }}
         with:
           ref: "${{ github.head_ref }}"
-      - name: Checkout workflow
-        id: checkout_workflow
-        uses: actions/checkout@v3
-        with:
-          repository: nrkno/github-workflow-terraform-config
-          ref: ${{ needs.setup.outputs.workflow_tag }}
-          path: .github-workflow-terraform-config
       - uses: actions/setup-python@v4
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
         run: |
+          set -x
           pip3 install yq
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
@@ -432,6 +426,14 @@ jobs:
           fi
           workflow_tag="$(~/.local/bin/yq -r ".jobs[\"${GITHUB_JOB}\"].uses" < "${workflow_file}"| cut -d@ -f2)"
           echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+      - name: Checkout workflow
+        id: checkout_workflow
+        uses: actions/checkout@v3
+        with:
+          repository: nrkno/github-workflow-terraform-config
+          ref: ${{ steps.workflow_tag.outputs.workflow_tag }}
+          path: .github-workflow-terraform-config
       - name: Set configuration
         id: set_config
         shell: bash
