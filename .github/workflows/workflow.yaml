@@ -85,6 +85,10 @@ on:
         description: Generate documentation recursively for all modules in the working directory.
         type: boolean
         default: false
+      workflow-ref:
+        description: "Internal: Specify the Git ref to use when the workflow is checking out its own repository. Pass an empty string for auto-detection."
+        type: string
+        default: ""
       # Toggles used for setting environment variables in this workflow.
       # It is not possible to pass env vars directly to reusable workflows.
       enable-azurerm-3-beta-resources:
@@ -428,6 +432,13 @@ jobs:
         id: workflow_tag
         shell: bash
         run: |
+          # Skip auto-detection if input is specified
+          if [[ -n "${{ inputs.workflow-ref }}" ]]
+          then
+            echo "workflow_tag=${{ inputs.workflow-ref }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           pip3 install yq
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
