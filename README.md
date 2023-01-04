@@ -36,6 +36,7 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
 - `terraform-docs-git-push` (boolean, default `true`) - Automatically push the commit to the pull request branch.
 - `terraform-docs-fail-on-diff` (boolean, default `true`) - Internal: Fail if there are changes in the documentation.
 - `terraform-docs-recursive` (boolean, default `false`) - Generate documentation recursively for all modules in the working directory.
+- `workflow-ref` (string, default `""`) - Internal: Specify the Git ref to use when the workflow is checking out its own repository. Pass an empty string for auto-detection.
 - `enable-azurerm-3-beta-resources` (boolean, default `false`) - Set the environment variable `ARM_THREEPOINTZERO_BETA_RESOURCES=true` when running the Terraform CLI.
 
 ### Secrets
