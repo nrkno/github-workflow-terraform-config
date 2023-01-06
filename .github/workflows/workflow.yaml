@@ -445,7 +445,7 @@ jobs:
           then
             workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
           fi
-          workflow_tag="$(~/.local/bin/yq -r ".jobs[].uses" < "${workflow_file}"| cut -d@ -f2 | head -1)"
+          workflow_tag="$(~/.local/bin/yq -r ".jobs[].uses" < "${workflow_file}"| grep github-workflow-terraform-config | cut -d@ -f2 | head -1)"
           echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
       - name: Checkout workflow
