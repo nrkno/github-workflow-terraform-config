@@ -21,7 +21,7 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
 - `ignore-files` (string, default `""`) - Comma-separated list of filepaths to delete before running Terraform. This is relative to the working-directory argument.
 - `status-comment-enabled` (boolean, default `true`) - Post a status comment in the pull request issue after checks have completed.
 - `status-comment-message` (string, default `""`) - A custom message to append to the status comment.
-- `runs-on` (string, default `"self-hosted"`) - Defines the type of machine to run the jobs on.
+- `runs-on` (string, default `"nrk-azure-intern"`) - Defines the type of machine to run the jobs on.
 - `trivy-job-enabled` (boolean, default `true`) - Scan repository for IaC vulnerabilities using Trivy.
 - `trivy-ignore-unfixed` (boolean, default `true`) - Ignore vulnerabilities that do not have a known fix.
 - `trivy-sbom-enabled` (boolean, default `false`) - Generate a Software Bill of Materials (SBOM) report.
