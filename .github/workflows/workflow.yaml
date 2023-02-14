@@ -98,12 +98,6 @@ on:
     secrets:
       registries:
         required: false
-      ssh-private-key:
-        required: true
-      ssh-private-key-docs-push:
-        required: false
-      token:
-        required: true
 
 name: Terraform
 jobs:
@@ -112,25 +106,6 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     if: inputs.terraform-job-enabled
     steps:
-      # Work-around for not being able to test if a secret has been set when
-      # using `if` for conditional step execution.
-      - name: Determine need for SSH agent
-        id: ssh-agent-test
-        shell: bash
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.ssh-private-key }}
-        run: |
-          set +e
-          test -n "${SSH_PRIVATE_KEY}"
-          echo "exit_code=${?}" >> $GITHUB_OUTPUT
-
-      # SSH agent used to checkout Terraform modules from other private repos on Github.
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.7.0
-        if: steps.ssh-agent-test.outputs.exit_code == '0'
-        with:
-          ssh-private-key: ${{ secrets.ssh-private-key }}
-
       - name: Configure secrets
         shell: bash
         env:
@@ -145,6 +120,17 @@ jobs:
             echo "Setting ${tokenvar} for ${domain}"
             echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
           done
+
+      - name: Get terraform checkout credentials
+        id: credentials
+        shell: bash
+        run: |
+          set -e
+
+          GITHUB_TOKEN=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
+          token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
+          terraform_token=$(jq -r .token <<<$token)
+          echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
 
       - name: Configure environment
         run: |
@@ -208,6 +194,27 @@ jobs:
           echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
+      - name: 'Run: setup git credentials'
+        id: credentials_setup
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          TOKEN: ${{ steps.credentials.outputs.terraform_token }}
+        run: |
+          set +e
+
+          credentials_dir=$(mktemp -d)
+          echo "git_credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
+          if [ -f ~/.gitconfig ]
+          then
+            cp ~/.gitconfig "${credentials_dir}/"
+          fi
+          echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials"
+          git config --global credential.helper "store --file=${credentials_dir}/credentials"
+          git config --global --replace-all 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
+          git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
+          cat ~/.gitconfig
+
       - name: 'Run: terraform init'
         id: init
         shell: bash
@@ -217,6 +224,24 @@ jobs:
           terraform init -no-color -backend=false
           echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
+
+      - name: 'Run: cleanup setup git'
+        id: credentials_cleanup
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          GIT_CREDENTIALS_DIR: ${{ steps.credentials_setup.outputs.git_credentials_dir }}
+        run: |
+          set +e
+
+          if [ -f "${GIT_CREDENTIALS_DIR}/.gitconfig" ]
+          then
+            cp "${GIT_CREDENTIALS_DIR}/.gitconfig" ~/.gitconfig
+          else
+            rm ~/.gitconfig
+          fi
+          shred -u "${GIT_CREDENTIALS_DIR}/credentials"
+          rm -r -- "${GIT_CREDENTIALS_DIR}"
 
         # workaround for https://github.com/hashicorp/terraform/issues/28490
       - uses: actions/setup-go@v3
@@ -403,30 +428,21 @@ jobs:
     needs: [terraform]
     concurrency: terraform-docs
     steps:
-      - name: Check ssh key for checkout and push
-        id: ssh_key_check
+      - name: Get terraform docs credentials
+        id: credentials
         shell: bash
-        env:
-          SSH_PRIVATE_KEY: "${{ secrets.ssh-private-key-docs-push }}"
         run: |
-          set +e
-          if test -n "${SSH_PRIVATE_KEY}"
-          then
-            echo "has_ssh_key=yes" >> $GITHUB_OUTPUT
-          else
-            echo "has_ssh_key=no" >> $GITHUB_OUTPUT
-          fi
+          set -e
+
+          GITHUB_TOKEN=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
+          token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_docs_token)
+          terraform_docs_token=$(jq -r .token <<<$token)
+          echo "terraform_docs_token=$terraform_docs_token" >> "$GITHUB_OUTPUT"
       - name: Checkout
         uses: actions/checkout@v3
-        if: ${{ steps.ssh_key_check.outputs.has_ssh_key == 'yes' }}
         with:
           ref: "${{ github.head_ref }}"
-          ssh-key: "${{ secrets.ssh-private-key-docs-push }}"
-      - name: Checkout
-        uses: actions/checkout@v3
-        if: ${{ steps.ssh_key_check.outputs.has_ssh_key  != 'yes' }}
-        with:
-          ref: "${{ github.head_ref }}"
+          token: ${{ steps.credentials.outputs.terraform_docs_token }}
       - uses: actions/setup-python@v4
       - name: Get workflow ref
         id: workflow_tag
@@ -483,7 +499,7 @@ jobs:
           output-method: ${{ inputs.terraform-docs-output-method }}
           git-push: false
       - name: Commit doc updates
-        if: ${{ steps.ssh_key_check.outputs.has_ssh_key == 'yes' && inputs.terraform-docs-git-push }}
+        if: ${{ inputs.terraform-docs-git-push }}
         shell: bash
         env:
           COMMIT_MESSAGE: ${{ inputs.terraform-docs-git-commit-message }}
