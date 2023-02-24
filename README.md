@@ -48,9 +48,6 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
 
 ### Secrets
 - `registries`
-- `ssh-private-key` (**required**)
-- `ssh-private-key-docs-push`
-- `token` (**required**)
 <!-- autodoc end -->
 
 ## Developing
