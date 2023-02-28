@@ -127,8 +127,7 @@ jobs:
           terraform_token=$(jq -r .token <<<$token)
           echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       # Delete ignored files inside repo before running Terraform.
       # It should not be possible to delete files outside of the repository root.
@@ -165,14 +164,14 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
 
-      - name: 'Run: terraform version'
+      - name: terraform version
         shell: bash
         working-directory: ${{ inputs.working-directory }}
         run: |
           set +e
           terraform version
 
-      - name: 'Run: terraform fmt'
+      - name: terraform fmt
         id: fmt
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -182,7 +181,7 @@ jobs:
           echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
-      - name: 'Run: setup git credentials'
+      - name: Load git credentials
         id: credentials_setup
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -203,7 +202,7 @@ jobs:
           git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
           cat ~/.gitconfig
 
-      - name: 'Run: terraform init'
+      - name: terraform init
         id: init
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -213,7 +212,7 @@ jobs:
           echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
-      - name: 'Run: cleanup setup git'
+      - name: Cleanup git credentials
         id: credentials_cleanup
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -235,8 +234,8 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: '1.16.15'
-      - name: 'Run terraform configuration aliases'
-        uses: bendrucker/terraform-configuration-aliases-action@v1.3.0
+
+      - uses: bendrucker/terraform-configuration-aliases-action@v1.3.0
         with:
           path: ${{ inputs.working-directory }}
 
@@ -272,7 +271,7 @@ jobs:
               body: body,
             });
 
-      - name: 'Determine job exit status'
+      - name: Determine job exit status
         shell: python
         run: |
           import sys
