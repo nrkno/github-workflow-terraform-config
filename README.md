@@ -13,7 +13,7 @@ permissions:
   pull-requests: write
 
 name: Terraform
-uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
+uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v4.0.0
   with:
     # inputs
   secrets:
