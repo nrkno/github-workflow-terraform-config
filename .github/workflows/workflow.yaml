@@ -129,6 +129,11 @@ jobs:
 
       - uses: actions/checkout@v3
 
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
       # Delete ignored files inside repo before running Terraform.
       # It should not be possible to delete files outside of the repository root.
       - name: Remove ignored files
@@ -157,12 +162,6 @@ jobs:
             elif p.is_dir():
               shutil.rmtree(p.name)
               print("deleted directory:", p.name)
-
-      - name: Configure Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-          terraform_wrapper: false
 
       - name: terraform version
         shell: bash
