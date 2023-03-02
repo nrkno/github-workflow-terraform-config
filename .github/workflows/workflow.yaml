@@ -13,7 +13,7 @@ on:
         description: Working directory for all workflow operations, unless documented otherwise.
         type: string
         default: .
-      ignore-files:
+      terraform-ignore-files:
         description: Comma-separated list of filepaths to delete before running Terraform. This is relative to the working-directory argument.
         type: string
         default: ""
