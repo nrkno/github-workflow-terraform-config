@@ -89,12 +89,6 @@ on:
         description: "Internal: Specify the Git ref to use when the workflow is checking out its own repository. Pass an empty string for auto-detection."
         type: string
         default: ""
-      # Toggles used for setting environment variables in this workflow.
-      # It is not possible to pass env vars directly to reusable workflows.
-      enable-azurerm-3-beta-resources:
-        description: "Set the environment variable `ARM_THREEPOINTZERO_BETA_RESOURCES=true` when running the Terraform CLI."
-        type: boolean
-        default: false
     secrets:
       registries:
         required: false
@@ -132,13 +126,6 @@ jobs:
           token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
           terraform_token=$(jq -r .token <<<$token)
           echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
-
-      - name: Configure environment
-        run: |
-          set +ex
-          if [ '${{ inputs.enable-azurerm-3-beta-resources }}' = 'true' ]; then
-            echo 'ARM_THREEPOINTZERO_BETA_RESOURCES=true' >> $GITHUB_ENV
-          fi
 
       - name: Checkout
         uses: actions/checkout@v3
