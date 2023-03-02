@@ -25,7 +25,7 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
 - `terraform-job-enabled` (boolean, default `true`) - Enable the Terraform checks
 - `terraform-version` (string, default `"latest"`) - Version of Terraform to use
 - `working-directory` (string, default `"."`) - Working directory for all workflow operations, unless documented otherwise.
-- `ignore-files` (string, default `""`) - Comma-separated list of filepaths to delete before running Terraform. This is relative to the working-directory argument.
+- `terraform-ignore-files` (string, default `""`) - Comma-separated list of filepaths to remove before running Terraform operations. This is relative to the working-directory argument.
 - `status-comment-enabled` (boolean, default `true`) - Post a status comment in the pull request issue after checks have completed.
 - `status-comment-message` (string, default `""`) - A custom message to append to the status comment.
 - `runs-on` (string, default `"nrk-azure-intern"`) - Defines the type of machine to run the jobs on.
@@ -44,7 +44,6 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v2
 - `terraform-docs-fail-on-diff` (boolean, default `true`) - Internal: Fail if there are changes in the documentation.
 - `terraform-docs-recursive` (boolean, default `false`) - Generate documentation recursively for all modules in the working directory.
 - `workflow-ref` (string, default `""`) - Internal: Specify the Git ref to use when the workflow is checking out its own repository. Pass an empty string for auto-detection.
-- `enable-azurerm-3-beta-resources` (boolean, default `false`) - Set the environment variable `ARM_THREEPOINTZERO_BETA_RESOURCES=true` when running the Terraform CLI.
 
 ### Secrets
 - `registries`
