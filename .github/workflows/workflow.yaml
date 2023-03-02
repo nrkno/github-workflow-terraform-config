@@ -14,7 +14,7 @@ on:
         type: string
         default: .
       terraform-ignore-files:
-        description: Comma-separated list of filepaths to delete before running Terraform. This is relative to the working-directory argument.
+        description: Comma-separated list of filepaths to remove before running Terraform operations. This is relative to the working-directory argument.
         type: string
         default: ""
       status-comment-enabled:
