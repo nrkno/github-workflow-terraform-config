@@ -118,6 +118,7 @@ jobs:
             IFS="=" read domain token <<<$registry
             tokenvar="TF_TOKEN_$(tr . _ <<<$domain | sed s/-/__/g)"
             echo "Setting ${tokenvar} for ${domain}"
+            echo "::add-mask::${token}"
             echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
           done
 
