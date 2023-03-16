@@ -23,7 +23,7 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v4.
 <!-- autodoc start -->
 ### Inputs
 - `terraform-job-enabled` (boolean, default `true`) - Enable the Terraform checks
-- `terraform-version` (string, default `"latest"`) - Version of Terraform to use
+- `terraform-version` (string, default `"v1.4.0"`) - Version of Terraform to use
 - `working-directory` (string, default `"."`) - Working directory for all workflow operations, unless documented otherwise.
 - `terraform-ignore-files` (string, default `""`) - Comma-separated list of filepaths to remove before running Terraform operations. This is relative to the working-directory argument.
 - `status-comment-enabled` (boolean, default `true`) - Post a status comment in the pull request issue after checks have completed.
