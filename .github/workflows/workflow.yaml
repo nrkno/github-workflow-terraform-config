@@ -8,7 +8,7 @@ on:
       terraform-version:
         description: Version of Terraform to use
         type: string
-        default: latest
+        default: v1.4.0
       working-directory:
         description: Working directory for all workflow operations, unless documented otherwise.
         type: string
