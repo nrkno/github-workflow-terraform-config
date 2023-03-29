@@ -26,7 +26,7 @@ on:
         type: string
         default: ""
       runs-on:
-        description: Defines the type of machine to run the jobs on.
+        description: Defines the type of machine to run the jobs on. Separate values with comma and an optional space.
         type: string
         default: nrk-azure-intern
       trivy-job-enabled:
@@ -95,9 +95,31 @@ on:
 
 name: Terraform
 jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Configure runs-on input
+        id: runs-on
+        shell: python
+        env:
+          RUNS_ON: ${{ inputs.runs-on }}
+        run: |
+          import json
+          import os
+          # Split all values by comma, and remove whitespace
+          args = [s.strip() for s in os.getenv('RUNS_ON', '').split(',') if len(s) > 0]
+          # Write the resulting list as JSON to an output variable
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            print('runs-on='+json.dumps(args), file=f)
+            print('::info::Runners:', args)
+    outputs:
+      runs-on: ${{ steps.runs-on.outputs.runs-on }}
+
   terraform:
     name: Config Validation in ${{ inputs.working-directory }}
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ needs.setup.outputs.runs-on }}
     if: inputs.terraform-job-enabled
     steps:
       - name: Configure secrets
@@ -293,7 +315,7 @@ jobs:
 
   trivy:
     name: Trivy Vulnerability Scan in ${{ inputs.working-directory }}
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ needs.setup.outputs.runs-on }}
     if: inputs.trivy-job-enabled
     steps:
       - name: Checkout
@@ -393,7 +415,7 @@ jobs:
 
   trivy-sbom:
     name: Generate SBOM in ${{ inputs.working-directory }}
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ needs.setup.outputs.runs-on }}
     if: inputs.trivy-sbom-enabled
     steps:
       - name: Checkout
@@ -409,7 +431,7 @@ jobs:
 
   terraform-docs:
     name: Render terraform docs in ${{ inputs.working-directory }}
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ needs.setup.outputs.runs-on }}
     if: inputs.terraform-docs-job-enabled && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
     needs: [terraform]
     concurrency: terraform-docs
