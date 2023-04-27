@@ -3,6 +3,9 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    commit-message:
+      include: scope
+      prefix: feat
     schedule:
       interval: daily
       time: "09:00"
