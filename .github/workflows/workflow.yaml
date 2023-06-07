@@ -201,6 +201,28 @@ jobs:
           git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
           cat ~/.gitconfig
 
+      - name: Set terraform cache id
+        id: cache_id
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set +e
+
+          if [ -f .terraform.lock.hcl ]
+          then
+            echo "terraform_cache_id=$(sha256sum .terraform.lock.hcl | cut -d ' ' -f1)" >> "${GITHUB_OUTPUT}"
+          else
+            echo "terraform_cache_id=${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: cache terraform modules and providers
+        uses: actions/cache@v3.3.1
+        with:
+          path: |
+            ${{ inputs.working-directory }}/.terraform/modules/
+            ${{ inputs.working-directory }}/.terraform/providers/
+          key: ${{ runner.os }}-${{ steps.cache_id.outputs.terraform_cache_id }}
+
       - name: terraform init
         id: init
         shell: bash
