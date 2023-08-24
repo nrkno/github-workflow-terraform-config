@@ -270,27 +270,31 @@ jobs:
           echo "exit_code=${?}" >> $GITHUB_OUTPUT
         continue-on-error: true
 
-      - name: Post results as comment
-        uses: actions/github-script@v6
-        if: github.event.pull_request && github.actor != 'dependabot[bot]' && inputs.status-comment-enabled
+      - name: Set check status
+        id: status
+        run: |
+          if [[ ${{ steps.fmt.outputs.exit_code }}  == '0' ]]; then fmt='✔️'; else fmt='❌'; fi
+          if [[ ${{ steps.init.outputs.exit_code }}  == '0' ]]; then init='✔️'; else init='❌'; fi
+          if [[ ${{ steps.validate.outputs.exit_code }}  == '0' ]]; then validate='✔️'; else validate='❌'; fi
+
+          echo "fmt=${fmt}" >> $GITHUB_OUTPUT
+          echo "init=${init}" >> $GITHUB_OUTPUT
+          echo "validate=${validate}" >> $GITHUB_OUTPUT
+
+      - name: Post/update results as comment
+        uses: edumserrano/find-create-or-update-comment@v1.0.4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const bool_emoji = (v) => Boolean(v) ? '✔️' : '❌';
-            const data = {
-              url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}',
-              fmt: bool_emoji(${{ steps.fmt.outputs.exit_code == '0' }}),
-              init: bool_emoji(${{ steps.init.outputs.exit_code == '0' }}),
-              validate: bool_emoji(${{ steps.validate.outputs.exit_code == '0' }}),
-              status: Boolean(${{ steps.fmt.outputs.exit_code == '0' && steps.init.outputs.exit_code == '0' && steps.validate.outputs.exit_code == '0' }})
-            }
-            const body = `format: ${data.fmt} | init: ${data.init} | validate: ${data.validate}\n[check](${data.url}) ${data.status ? 'succeeded' : 'failed'}:\n\n${{ inputs.status-comment-message }}`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body,
-            });
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: '<!-- terraform-test-results -->'
+          comment-author: 'github-actions[bot]'
+          body: |
+            <!-- terraform-test-results -->
+            Format: ${{ steps.status.outputs.fmt }} Init: ${{ steps.status.outputs.init }} Validate: ${{ steps.status.outputs.validate }}
+
+            [check](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ${{ inputs.status-comment-message }}
+          edit-mode: replace
 
       - name: Determine job exit status
         shell: python
