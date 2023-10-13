@@ -283,6 +283,9 @@ jobs:
 
       - name: Post/update results as comment
         uses: edumserrano/find-create-or-update-comment@v1.0.4
+        # This step will fail when running on the main branch, as there
+        # won't be any PR or comment to find.
+        continue-on-error: true
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-includes: '<!-- terraform-test-results -->'
