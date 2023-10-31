@@ -127,9 +127,9 @@ jobs:
           terraform_token=$(jq -r .token <<<$token)
           echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.1.1
 
-      - uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@v2.0.3
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -252,7 +252,7 @@ jobs:
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
         # workaround for https://github.com/hashicorp/terraform/issues/28490
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v4.1.0
         with:
           go-version: '1.16.15'
 
@@ -326,10 +326,10 @@ jobs:
     if: inputs.trivy-job-enabled
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
 
       - name: Configure Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4.7.1
         with:
           python-version: 3.11
 
@@ -426,7 +426,7 @@ jobs:
     if: inputs.trivy-sbom-enabled
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
       - name: Submit SBOM results to Dependency Snapshots
         uses: aquasecurity/trivy-action@0.13.1
         with:
@@ -454,11 +454,11 @@ jobs:
           terraform_docs_token=$(jq -r .token <<<$token)
           echo "terraform_docs_token=$terraform_docs_token" >> "$GITHUB_OUTPUT"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           ref: "${{ github.head_ref }}"
           token: ${{ steps.credentials.outputs.terraform_docs_token }}
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4.7.1
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
@@ -481,7 +481,7 @@ jobs:
           cat $GITHUB_OUTPUT
       - name: Checkout workflow
         id: checkout_workflow
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           repository: nrkno/github-workflow-terraform-config
           ref: ${{ steps.workflow_tag.outputs.workflow_tag }}
