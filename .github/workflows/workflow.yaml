@@ -354,7 +354,7 @@ jobs:
               print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
 
       - name: Scan IaC code
-        uses: aquasecurity/trivy-action@0.15.0
+        uses: aquasecurity/trivy-action@0.16.0
         id: trivy-scan
         with:
           exit-code: '0'
@@ -428,7 +428,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.1
       - name: Submit SBOM results to Dependency Snapshots
-        uses: aquasecurity/trivy-action@0.15.0
+        uses: aquasecurity/trivy-action@0.16.0
         with:
           scan-type: 'fs'
           format: 'github'
