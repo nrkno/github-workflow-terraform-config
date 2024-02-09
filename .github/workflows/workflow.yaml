@@ -282,7 +282,7 @@ jobs:
           echo "validate=${validate}" >> $GITHUB_OUTPUT
 
       - name: Post/update results as comment
-        uses: edumserrano/find-create-or-update-comment@v2.0.0
+        uses: edumserrano/find-create-or-update-comment@v3.0.0
         # This step will fail when running on the main branch, as there
         # won't be any PR or comment to find.
         continue-on-error: true
