@@ -139,7 +139,7 @@ jobs:
       - name: Remove ignored files
         if: inputs.ignore-files != ''
         env:
-          IGNORE_FILES: ${{ inputs.ignore-files }}
+          IGNORE_FILES: ${{ inputs.terraform-ignore-files }}
         shell: python
         working-directory: ${{ inputs.working-directory }}
         run: |
