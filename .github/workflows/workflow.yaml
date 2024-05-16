@@ -30,15 +30,15 @@ on:
         type: string
         default: nrk-azure-intern
       trivy-job-enabled:
-        description:  Scan repository for IaC vulnerabilities using Trivy.
+        description: Scan repository for IaC vulnerabilities using Trivy.
         type: boolean
         default: true
       trivy-ignore-unfixed:
-        description:  Ignore vulnerabilities that do not have a known fix.
+        description: Ignore vulnerabilities that do not have a known fix.
         type: boolean
         default: true
       trivy-sbom-enabled:
-        description:  Generate a Software Bill of Materials (SBOM) report.
+        description: Generate a Software Bill of Materials (SBOM) report.
         type: boolean
         default: false
       trivy-severity:
@@ -46,7 +46,7 @@ on:
         type: string
         default: MEDIUM,HIGH,CRITICAL
       trivy-ignore-files:
-        description:  Comma-separated list of paths to .trivyignore files. Paths are relative to the working-directory argument.
+        description: Comma-separated list of paths to .trivyignore files. Paths are relative to the working-directory argument.
         type: string
         default: ""
       trivy-error-is-success:
@@ -254,13 +254,13 @@ jobs:
         # workaround for https://github.com/hashicorp/terraform/issues/28490
       - uses: actions/setup-go@v5.0.1
         with:
-          go-version: '1.16.15'
+          go-version: "1.16.15"
 
       - uses: bendrucker/terraform-configuration-aliases-action@v1.3.0
         with:
           path: ${{ inputs.working-directory }}
 
-      - name: 'Run: terraform validate'
+      - name: "Run: terraform validate"
         id: validate
         shell: bash
         working-directory: ${{ inputs.working-directory }}
@@ -288,14 +288,14 @@ jobs:
         continue-on-error: true
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-includes: '<!-- terraform-test-results -->'
-          comment-author: 'github-actions[bot]'
+          body-includes: "<!-- terraform-test-results -->"
+          comment-author: "github-actions[bot]"
           body: |
             <!-- terraform-test-results -->
             Format: ${{ steps.status.outputs.fmt }} Init: ${{ steps.status.outputs.init }} Validate: ${{ steps.status.outputs.validate }}
 
             [check](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            
+
             ${{ inputs.status-comment-message }}
           edit-mode: replace
 
@@ -357,7 +357,7 @@ jobs:
         uses: aquasecurity/trivy-action@0.20.0
         id: trivy-scan
         with:
-          exit-code: '0'
+          exit-code: "0"
           format: json
           hide-progress: false
           ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
@@ -430,11 +430,11 @@ jobs:
       - name: Submit SBOM results to Dependency Snapshots
         uses: aquasecurity/trivy-action@0.20.0
         with:
-          scan-type: 'fs'
-          format: 'github'
-          output: 'dependency-results.sbom.json'
-          image-ref: '.'
-          github-pat: '${{ secrets.GITHUB_TOKEN }}'
+          scan-type: "fs"
+          format: "github"
+          output: "dependency-results.sbom.json"
+          image-ref: "."
+          github-pat: "${{ secrets.GITHUB_TOKEN }}"
 
   terraform-docs:
     name: Render terraform docs in ${{ inputs.working-directory }}
@@ -513,11 +513,11 @@ jobs:
           output-file: ${{ inputs.terraform-docs-output-file }}
           output-method: ${{ inputs.terraform-docs-output-method }}
           git-push: false
-      - name: Commit doc updates
+
+      - name: Check for changes
+        id: check_for_changes
         if: ${{ inputs.terraform-docs-git-push }}
         shell: bash
-        env:
-          COMMIT_MESSAGE: ${{ inputs.terraform-docs-git-commit-message }}
         run: |
           if git status --porcelain |grep -E 'A[[:space:]]+.terraform-docs.ya?ml'
           then
@@ -526,12 +526,18 @@ jobs:
           if [ $(git status --porcelain | grep -c -E '*.\.md$') -eq 0 ]
           then
             echo "No changes to .md files"
-            exit 0
+            echo "changes_detected=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected"
+            echo "changes_detected=true" >> $GITHUB_OUTPUT
           fi
-          # sometimes cleanup fails, workaround
-          sudo chown -R -- $(id -u) .git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add $(git status --porcelain | awk '/.*\.md$/ { print $2 }')
-          git commit -m "$COMMIT_MESSAGE"
-          git push
+
+      - uses: planetscale/ghcommit-action@v0.1.6
+        if: steps.check_for_changes.outputs.changes_detected == 'true'
+        with:
+          commit_message: ${{ inputs.terraform-docs-git-commit-message }}
+          repo: ${{ github.repository }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          empty: true
+        env:
+          GITHUB_TOKEN: ${{ steps.credentials.outputs.terraform_docs_token }}
