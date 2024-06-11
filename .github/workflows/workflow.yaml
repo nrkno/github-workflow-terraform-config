@@ -127,7 +127,7 @@ jobs:
           terraform_token=$(jq -r .token <<<$token)
           echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4.1.4
+      - uses: actions/checkout@v4.1.6
 
       - uses: hashicorp/setup-terraform@v3.1.1
         with:
@@ -326,7 +326,7 @@ jobs:
     if: inputs.trivy-job-enabled
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.4
+        uses: actions/checkout@v4.1.6
 
       - name: Configure Python
         uses: actions/setup-python@v5.1.0
@@ -426,7 +426,7 @@ jobs:
     if: inputs.trivy-sbom-enabled
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.4
+        uses: actions/checkout@v4.1.6
       - name: Submit SBOM results to Dependency Snapshots
         uses: aquasecurity/trivy-action@0.20.0
         with:
@@ -454,7 +454,7 @@ jobs:
           terraform_docs_token=$(jq -r .token <<<$token)
           echo "terraform_docs_token=$terraform_docs_token" >> "$GITHUB_OUTPUT"
       - name: Checkout
-        uses: actions/checkout@v4.1.4
+        uses: actions/checkout@v4.1.6
         with:
           ref: "${{ github.head_ref }}"
           token: ${{ steps.credentials.outputs.terraform_docs_token }}
@@ -481,7 +481,7 @@ jobs:
           cat $GITHUB_OUTPUT
       - name: Checkout workflow
         id: checkout_workflow
-        uses: actions/checkout@v4.1.4
+        uses: actions/checkout@v4.1.6
         with:
           repository: nrkno/github-workflow-terraform-config
           ref: ${{ steps.workflow_tag.outputs.workflow_tag }}
