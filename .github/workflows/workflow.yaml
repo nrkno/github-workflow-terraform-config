@@ -354,7 +354,7 @@ jobs:
               print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
 
       - name: Scan IaC code
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.23.0
         id: trivy-scan
         with:
           exit-code: "0"
@@ -428,7 +428,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.7
       - name: Submit SBOM results to Dependency Snapshots
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.23.0
         with:
           scan-type: "fs"
           format: "github"
@@ -532,7 +532,7 @@ jobs:
             echo "changes_detected=true" >> $GITHUB_OUTPUT
           fi
 
-      - uses: planetscale/ghcommit-action@v0.1.42
+      - uses: planetscale/ghcommit-action@v0.1.43
         if: steps.check_for_changes.outputs.changes_detected == 'true'
         with:
           commit_message: ${{ inputs.terraform-docs-git-commit-message }}
