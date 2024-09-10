@@ -504,7 +504,7 @@ jobs:
         run: |
           rm -rf -- .github-workflow-terraform-config
       - name: Render terraform docs and push
-        uses: terraform-docs/gh-actions@v1.2.0
+        uses: terraform-docs/gh-actions@v1.2.2
         with:
           working-dir: ${{ inputs.working-directory }}
           config-file: ${{ inputs.terraform-docs-config-file }}
