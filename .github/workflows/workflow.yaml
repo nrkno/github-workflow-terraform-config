@@ -216,7 +216,7 @@ jobs:
           fi
 
       - name: cache terraform modules and providers
-        uses: actions/cache@v4.0.2
+        uses: actions/cache@v4.1.0
         with:
           path: |
             ${{ inputs.working-directory }}/.terraform/modules/
