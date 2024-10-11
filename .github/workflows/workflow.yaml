@@ -28,7 +28,7 @@ on:
       runs-on:
         description: Defines the type of machine to run the jobs on.
         type: string
-        default: nrk-azure-intern
+        default: ubuntu-latest
       trivy-job-enabled:
         description: Scan repository for IaC vulnerabilities using Trivy.
         type: boolean
