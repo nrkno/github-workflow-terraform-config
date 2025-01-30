@@ -325,8 +325,110 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     if: inputs.trivy-job-enabled
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4.2.2
+      - name: Configure secrets
+        shell: bash
+        env:
+          REGISTRIES: "${{ secrets.registries }}"
+        run: |
+          export IFS=';'
+          for registry in $REGISTRIES
+          do
+            echo $registry
+            IFS="=" read domain token <<<$registry
+            tokenvar="TF_TOKEN_$(tr . _ <<<$domain | sed s/-/__/g)"
+            echo "Setting ${tokenvar} for ${domain}"
+            echo "::add-mask::${token}"
+            echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
+          done
+
+      - name: Get terraform checkout credentials
+        id: credentials
+        shell: bash
+        run: |
+          set -e
+
+          GITHUB_TOKEN=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
+          token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
+          terraform_token=$(jq -r .token <<<$token)
+          echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4.2.2
+
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Load git credentials
+        id: credentials_setup
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          TOKEN: ${{ steps.credentials.outputs.terraform_token }}
+        run: |
+          set +e
+
+          credentials_dir=$(mktemp -d)
+          echo "git_credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
+          if [ -f ~/.gitconfig ]
+          then
+            cp ~/.gitconfig "${credentials_dir}/"
+          fi
+          echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials"
+          git config --global credential.helper "store --file=${credentials_dir}/credentials"
+          git config --global --replace-all 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
+          git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
+          cat ~/.gitconfig
+
+      - name: Set terraform cache id
+        id: cache_id
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set +e
+
+          if [ -f .terraform.lock.hcl ]
+          then
+            echo "terraform_cache_id=$(sha256sum .terraform.lock.hcl | cut -d ' ' -f1)" >> "${GITHUB_OUTPUT}"
+          else
+            echo "terraform_cache_id=${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: cache terraform modules and providers
+        uses: actions/cache@v4.2.0
+        with:
+          path: |
+            ${{ inputs.working-directory }}/.terraform/modules/
+            ${{ inputs.working-directory }}/.terraform/providers/
+          key: ${{ runner.os }}-${{ steps.cache_id.outputs.terraform_cache_id }}
+
+      - name: terraform init
+        id: init
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set +e
+          terraform init -no-color -backend=false
+          echo "exit_code=${?}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Cleanup git credentials
+        id: credentials_cleanup
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          GIT_CREDENTIALS_DIR: ${{ steps.credentials_setup.outputs.git_credentials_dir }}
+        run: |
+          set +e
+
+          if [ -f "${GIT_CREDENTIALS_DIR}/.gitconfig" ]
+          then
+            cp "${GIT_CREDENTIALS_DIR}/.gitconfig" ~/.gitconfig
+          else
+            rm ~/.gitconfig
+          fi
+          shred -u "${GIT_CREDENTIALS_DIR}/credentials"
+          rm -r -- "${GIT_CREDENTIALS_DIR}"
 
       - name: Configure Python
         uses: actions/setup-python@v5.4.0
