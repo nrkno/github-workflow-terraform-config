@@ -431,7 +431,7 @@ jobs:
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
       - name: Configure Python
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6.0.0
         with:
           python-version: 3.11
 
@@ -560,7 +560,7 @@ jobs:
         with:
           ref: "${{ github.head_ref }}"
           token: ${{ steps.credentials.outputs.terraform_docs_token }}
-      - uses: actions/setup-python@v5.6.0
+      - uses: actions/setup-python@v6.0.0
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
