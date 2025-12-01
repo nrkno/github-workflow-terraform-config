@@ -560,7 +560,10 @@ jobs:
         with:
           ref: "${{ github.head_ref }}"
           token: ${{ steps.credentials.outputs.terraform_docs_token }}
-      - uses: actions/setup-python@v5.6.0
+      - name: setup uv
+        uses: astral-sh/setup-uv@v7
+      - name: Install yq
+        run: uv tool install yq
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
@@ -572,13 +575,12 @@ jobs:
             exit 0
           fi
 
-          pip3 install yq
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
             workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
           fi
-          workflow_tag="$(~/.local/bin/yq -r ".jobs[].uses" < "${workflow_file}"| grep github-workflow-terraform-config | cut -d@ -f2 | head -1)"
+          workflow_tag="$(yq -r ".jobs[].uses" < "${workflow_file}"| grep github-workflow-terraform-config | cut -d@ -f2 | head -1)"
           echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
       - name: Checkout workflow
