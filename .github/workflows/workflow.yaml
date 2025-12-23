@@ -636,7 +636,7 @@ jobs:
             echo "changes_detected=true" >> $GITHUB_OUTPUT
           fi
 
-      - uses: planetscale/ghcommit-action@v0.2.19
+      - uses: planetscale/ghcommit-action@v0.2.20
         if: steps.check_for_changes.outputs.changes_detected == 'true'
         with:
           commit_message: ${{ inputs.terraform-docs-git-commit-message }}
