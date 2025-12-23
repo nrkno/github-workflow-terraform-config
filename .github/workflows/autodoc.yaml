@@ -16,7 +16,7 @@ jobs:
           ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
       -
         name: Configure Python
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6.1.0
         with:
           python-version: 3.11
       -
