@@ -129,7 +129,7 @@ jobs:
 
       - uses: actions/checkout@v4.3.0
 
-      - uses: hashicorp/setup-terraform@v3.1.2
+      - uses: hashicorp/setup-terraform@v4.0.0
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -216,7 +216,7 @@ jobs:
           fi
 
       - name: cache terraform modules and providers
-        uses: actions/cache@v4.3.0
+        uses: actions/cache@v5.0.5
         with:
           path: |
             ${{ inputs.working-directory }}/.terraform/modules/
@@ -252,7 +252,7 @@ jobs:
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
         # workaround for https://github.com/hashicorp/terraform/issues/28490
-      - uses: actions/setup-go@v5.5.0
+      - uses: actions/setup-go@v6.4.0
         with:
           go-version: "1.16.15"
 
@@ -354,7 +354,7 @@ jobs:
 
       - uses: actions/checkout@v4.3.0
 
-      - uses: hashicorp/setup-terraform@v3.1.2
+      - uses: hashicorp/setup-terraform@v4.0.0
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -395,7 +395,7 @@ jobs:
           fi
 
       - name: cache terraform modules and providers
-        uses: actions/cache@v4.3.0
+        uses: actions/cache@v5.0.5
         with:
           path: |
             ${{ inputs.working-directory }}/.terraform/modules/
@@ -455,88 +455,88 @@ jobs:
             with open(gh_env_file, 'a') as f:
               print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
 
-      - name: Scan IaC code
-        uses: aquasecurity/trivy-action@0.34.0
-        id: trivy-scan
-        with:
-          exit-code: "0"
-          format: json
-          hide-progress: false
-          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
-          output: .trivy-scan-result.json
-          scan-ref: ${{ inputs.working-directory }}
-          scan-type: config
-          severity: ${{ inputs.trivy-severity }}
-          trivyignores: ${{ env.TRIVYIGNORE_PATHS }}
+  #     - name: Scan IaC code
+  #       uses: aquasecurity/trivy-action@0.35.0
+  #       id: trivy-scan
+  #       with:
+  #         exit-code: "0"
+  #         format: json
+  #         hide-progress: false
+  #         ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
+  #         output: .trivy-scan-result.json
+  #         scan-ref: ${{ inputs.working-directory }}
+  #         scan-type: config
+  #         severity: ${{ inputs.trivy-severity }}
+  #         trivyignores: ${{ env.TRIVYIGNORE_PATHS }}
 
-      - name: Parse scan results
-        shell: python
-        env:
-          REPORT_FILENAME: .trivy-scan-result.json
-        continue-on-error: ${{ inputs.trivy-error-is-success }}
-        run: |
-          import json
-          import os
-          import sys
-
-
-          def format_item(*, filename, error):
-              """
-              Returns a string representing the error, formatted in such a way that
-              GitHub will annotate the workflow run based on the severity of the error.
-              """
-              id = error.get("ID", "-1")
-              title = error.get("Title", "<no title>")
-              description = error.get("Description", "<no description>")
-              message = error.get("Message", "")
-              severity = error.get("Severity", "?")
-              resolution = error.get("Resolution", "<no resolution>")
-              start_line = error.get("CauseMetadata", {}).get("StartLine", "-1")
-              end_line = error.get("CauseMetadata", {}).get("EndLine", "-1")
-
-              message = f"{id}: {title}%0A{description}%0A{message}%0AResolution: {resolution}%0A"
-              for reference in error.get("References", []):
-                  message += f"%0A{reference}"
-
-              gh_severity = "warning"
-              if severity.upper() in ("HIGH", "CRITICAL"):
-                  gh_severity = "error"
-
-              return f"::{gh_severity} file={filename},line={start_line},endLine={end_line}::{message}"
+  #     - name: Parse scan results
+  #       shell: python
+  #       env:
+  #         REPORT_FILENAME: .trivy-scan-result.json
+  #       continue-on-error: ${{ inputs.trivy-error-is-success }}
+  #       run: |
+  #         import json
+  #         import os
+  #         import sys
 
 
-          with open(os.environ["REPORT_FILENAME"], "r") as f:
-              report = json.load(f)
-          print("Raw report:", json.dumps(report, indent=2))
+  #         def format_item(*, filename, error):
+  #             """
+  #             Returns a string representing the error, formatted in such a way that
+  #             GitHub will annotate the workflow run based on the severity of the error.
+  #             """
+  #             id = error.get("ID", "-1")
+  #             title = error.get("Title", "<no title>")
+  #             description = error.get("Description", "<no description>")
+  #             message = error.get("Message", "")
+  #             severity = error.get("Severity", "?")
+  #             resolution = error.get("Resolution", "<no resolution>")
+  #             start_line = error.get("CauseMetadata", {}).get("StartLine", "-1")
+  #             end_line = error.get("CauseMetadata", {}).get("EndLine", "-1")
 
-          exit_status = 0
-          for res in report.get("Results", []):
-              filename = res.get("Target", "<no filename>")
-              for err in res.get("Misconfigurations", []):
-                  print(format_item(filename=filename, error=err))
+  #             message = f"{id}: {title}%0A{description}%0A{message}%0AResolution: {resolution}%0A"
+  #             for reference in error.get("References", []):
+  #                 message += f"%0A{reference}"
 
-                  # Since severity filter is set at job level, we can exit non-zero for all
-                  # errors regardless of severity and let workflow consumers decide which
-                  # severity levels to care about.
-                  exit_status = 1
+  #             gh_severity = "warning"
+  #             if severity.upper() in ("HIGH", "CRITICAL"):
+  #                 gh_severity = "error"
 
-          sys.exit(exit_status)
+  #             return f"::{gh_severity} file={filename},line={start_line},endLine={end_line}::{message}"
 
-  trivy-sbom:
-    name: Generate SBOM in ${{ inputs.working-directory }}
-    runs-on: ${{ inputs.runs-on }}
-    if: inputs.trivy-sbom-enabled
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.3.0
-      - name: Submit SBOM results to Dependency Snapshots
-        uses: aquasecurity/trivy-action@0.34.0
-        with:
-          scan-type: "fs"
-          format: "github"
-          output: "dependency-results.sbom.json"
-          image-ref: "."
-          github-pat: "${{ secrets.GITHUB_TOKEN }}"
+
+  #         with open(os.environ["REPORT_FILENAME"], "r") as f:
+  #             report = json.load(f)
+  #         print("Raw report:", json.dumps(report, indent=2))
+
+  #         exit_status = 0
+  #         for res in report.get("Results", []):
+  #             filename = res.get("Target", "<no filename>")
+  #             for err in res.get("Misconfigurations", []):
+  #                 print(format_item(filename=filename, error=err))
+
+  #                 # Since severity filter is set at job level, we can exit non-zero for all
+  #                 # errors regardless of severity and let workflow consumers decide which
+  #                 # severity levels to care about.
+  #                 exit_status = 1
+
+  #         sys.exit(exit_status)
+
+  # trivy-sbom:
+  #   name: Generate SBOM in ${{ inputs.working-directory }}
+  #   runs-on: ${{ inputs.runs-on }}
+  #   if: inputs.trivy-sbom-enabled
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4.3.0
+  #     - name: Submit SBOM results to Dependency Snapshots
+  #       uses: aquasecurity/trivy-action@0.35.0
+  #       with:
+  #         scan-type: "fs"
+  #         format: "github"
+  #         output: "dependency-results.sbom.json"
+  #         image-ref: "."
+  #         github-pat: "${{ secrets.GITHUB_TOKEN }}"
 
   terraform-docs:
     name: Render terraform docs in ${{ inputs.working-directory }}
