@@ -4,7 +4,16 @@ Reusable GitHub workflow for validating a Terraform configuration repository.
 
 ## Usage
 
-You must set permissions in order to add the required id-token permissions which is off by default.
+The workflow declares no permissions of its own, so every job gets the token
+permissions the caller grants. Grant these:
+
+- `id-token: write`: required. The jobs use it to get tokens from the token service.
+- `contents: read`: for checking out the repository.
+- `pull-requests: write`: for the status comment. Without it the comment step fails
+  quietly and the checks still run.
+
+Do not grant more. `trivy-sbom-enabled` also needs `contents: write` to submit to the
+Dependency Graph.
 
 ```yaml
 permissions:
@@ -93,8 +102,9 @@ cannot read `docker run` lines, so it tracks the same references in
 reference into the matching `IMAGE` value; the `image-pins` job in the
 `Actions lockfile` workflow fails until the two agree.
 
-The terraform-docs job fetches its push token only in the commit step, masks it
-at once, and passes it to the container by name. The runner needs Docker, as it
+The terraform-docs job runs no code from the pull request: it reads the files as
+data and runs only these images. It fetches its push token only in the commit step,
+masks it at once, and passes it to the container by name. The runner needs Docker, as it
 did for the previous actions.
 
 ## Trivy
@@ -104,3 +114,13 @@ with Trivy `v0.70.0`, both released after the March 2026 tag compromise
 (GHSA-69fq-xp46-6x23). Do not move either pin to a mutable reference. The SBOM
 job submits to the Dependency Graph with the caller's token, so the caller must
 grant `contents: write` to use `trivy-sbom-enabled`.
+
+## Tests
+
+`.github/tests/test_steps.py` runs the workflow's shell and Python steps against
+hostile input (token handling, `terraform-ignore-files`, workflow-ref detection, git
+credentials). CI runs it on pull requests that touch `workflow.yaml`. Locally:
+
+```sh
+python -I -m unittest discover -s .github/tests
+```

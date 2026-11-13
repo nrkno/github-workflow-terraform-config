@@ -1,0 +1,29 @@
+name: Step tests
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/workflow.yaml'
+      - '.github/tests/**'
+
+permissions: {}
+
+jobs:
+  step-tests:
+    name: Run workflow steps against hostile input
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
+      - name: Configure Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: python -I -m pip install pyyaml==6.0.3
+      - name: Run tests
+        run: python -I -m unittest discover -s .github/tests -v

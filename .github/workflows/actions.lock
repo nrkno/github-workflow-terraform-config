@@ -10,6 +10,9 @@ workflows:
         - 'actions/setup-python@v6.3.0'
         - 'webfactory/ssh-agent@v0.10.0'
     '.github/workflows/lint-release.yaml': []
+    '.github/workflows/step-tests.yaml':
+        - 'actions/checkout@v6.0.3'
+        - 'actions/setup-python@v6.3.0'
     '.github/workflows/test.yaml': []
     '.github/workflows/workflow.yaml':
         - 'actions/cache@v5.0.5'
@@ -17,7 +20,6 @@ workflows:
         - 'actions/setup-go@v6.5.0'
         - 'actions/setup-python@v6.3.0'
         - 'aquasecurity/trivy-action@v0.36.0'
-        - 'astral-sh/setup-uv@v7.6.0'
         - 'bendrucker/terraform-configuration-aliases-action@v1.3.0'
         - 'edumserrano/find-create-or-update-comment@v3.0.0'
         - 'hashicorp/setup-terraform@v4.0.1'
@@ -78,11 +80,6 @@ dependencies:
         uses:
             - 'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae'
             - 'aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514'
-    'astral-sh/setup-uv@v7.6.0':
-        ref: 'v7.6.0'
-        commit: 'sha1-37802adc94f370d6bfd71619e3f0bf239e1f3b78'
-        owner_id: 115962839
-        repo_id: 846733598
     'bendrucker/terraform-configuration-aliases-action@v1.3.0':
         ref: 'v1.3.0'
         commit: 'sha1-a317089a1c5bb9d42f541471f1662bbfc2b167cb'

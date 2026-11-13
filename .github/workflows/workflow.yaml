@@ -99,12 +99,6 @@ jobs:
     name: Config Validation in ${{ inputs.working-directory }}
     runs-on: ${{ inputs.runs-on }}
     if: inputs.terraform-job-enabled
-    # The permissions documented for callers: id-token for the token service,
-    # pull-requests for the status comment.
-    permissions:
-      contents: read
-      id-token: write
-      pull-requests: write
     steps:
       - name: Configure secrets
         shell: bash
@@ -165,7 +159,8 @@ jobs:
           import shutil
 
           fpaths = os.getenv("IGNORE_FILES", "")
-          for fpath in [s.strip() for s in fpaths.split(",") if s]:
+          # Strip first, then drop empty entries: "a.tf, " has an empty last entry.
+          for fpath in [s for s in (s.strip() for s in fpaths.split(",")) if s]:
             # Make sure we only delete paths strictly inside the working directory
             root = os.path.realpath(os.getcwd())
             target = os.path.realpath(fpath)
@@ -207,17 +202,21 @@ jobs:
         run: |
           set +e
 
+          # A private global git config for this job. The runner's ~/.gitconfig is
+          # never modified, so nothing is left behind if the job is cancelled.
           credentials_dir=$(mktemp -d)
           echo "git_credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
           if [ -f ~/.gitconfig ]
           then
-            cp ~/.gitconfig "${credentials_dir}/"
+            cp ~/.gitconfig "${credentials_dir}/gitconfig"
           fi
-          echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials"
+          echo "GIT_CONFIG_GLOBAL=${credentials_dir}/gitconfig" >> "${GITHUB_ENV}"
+          export GIT_CONFIG_GLOBAL="${credentials_dir}/gitconfig"
+          (umask 077; echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials")
           git config --global credential.helper "store --file=${credentials_dir}/credentials"
           git config --global --replace-all 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
           git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
-          cat ~/.gitconfig
+          cat "${GIT_CONFIG_GLOBAL}"
 
       - name: Set terraform cache id
         id: cache_id
@@ -267,12 +266,8 @@ jobs:
             exit 0
           fi
 
-          if [ -f "${GIT_CREDENTIALS_DIR}/.gitconfig" ]
-          then
-            cp "${GIT_CREDENTIALS_DIR}/.gitconfig" ~/.gitconfig
-          else
-            rm -f ~/.gitconfig
-          fi
+          # Point git at an empty global config for the rest of the job.
+          echo "GIT_CONFIG_GLOBAL=/dev/null" >> "${GITHUB_ENV}"
           shred -u "${GIT_CREDENTIALS_DIR}/credentials"
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
@@ -359,9 +354,6 @@ jobs:
     name: Trivy Vulnerability Scan in ${{ inputs.working-directory }}
     runs-on: ${{ inputs.runs-on }}
     if: inputs.trivy-job-enabled
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - name: Configure secrets
         shell: bash
@@ -417,17 +409,21 @@ jobs:
         run: |
           set +e
 
+          # A private global git config for this job. The runner's ~/.gitconfig is
+          # never modified, so nothing is left behind if the job is cancelled.
           credentials_dir=$(mktemp -d)
           echo "git_credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
           if [ -f ~/.gitconfig ]
           then
-            cp ~/.gitconfig "${credentials_dir}/"
+            cp ~/.gitconfig "${credentials_dir}/gitconfig"
           fi
-          echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials"
+          echo "GIT_CONFIG_GLOBAL=${credentials_dir}/gitconfig" >> "${GITHUB_ENV}"
+          export GIT_CONFIG_GLOBAL="${credentials_dir}/gitconfig"
+          (umask 077; echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials")
           git config --global credential.helper "store --file=${credentials_dir}/credentials"
           git config --global --replace-all 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
           git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
-          cat ~/.gitconfig
+          cat "${GIT_CONFIG_GLOBAL}"
 
       - name: Set terraform cache id
         id: cache_id
@@ -477,12 +473,8 @@ jobs:
             exit 0
           fi
 
-          if [ -f "${GIT_CREDENTIALS_DIR}/.gitconfig" ]
-          then
-            cp "${GIT_CREDENTIALS_DIR}/.gitconfig" ~/.gitconfig
-          else
-            rm -f ~/.gitconfig
-          fi
+          # Point git at an empty global config for the rest of the job.
+          echo "GIT_CONFIG_GLOBAL=/dev/null" >> "${GITHUB_ENV}"
           shred -u "${GIT_CREDENTIALS_DIR}/credentials"
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
@@ -617,31 +609,46 @@ jobs:
         with:
           ref: "${{ github.head_ref }}"
           persist-credentials: false
-      - name: setup uv
-        uses: astral-sh/setup-uv@v7.6.0
-      - name: Install yq
-        run: uv tool install yq==4.4.5
+      # Nothing from the pull request is executed in this job: the steps below
+      # read its files as data and run only the digest-pinned images.
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
         env:
           WORKFLOW_REF: ${{ inputs.workflow-ref }}
         run: |
-          # Skip auto-detection if input is specified
+          # An explicit input comes from the caller, not from the pull request.
           if [[ -n "${WORKFLOW_REF}" ]]
           then
             echo "workflow_tag=${WORKFLOW_REF}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          # Otherwise read the ref this workflow was called with from the caller's
+          # workflow file. That file is part of the pull request, so only a release
+          # tag (v1, v4.121.0) or the default branch is accepted. Anything else, such
+          # as a SHA or a branch, falls back to the default branch.
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
-            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
+            workflow_file="$(grep -lFx -- "name: ${GITHUB_WORKFLOW}" .github/workflows/* 2>/dev/null | head -1 || true)"
           fi
-          workflow_tag="$(yq -r ".jobs[].uses" < "${workflow_file}"| grep github-workflow-terraform-config | cut -d@ -f2 | head -1)"
-          echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
-          cat $GITHUB_OUTPUT
+
+          detected=""
+          if [[ -n "${workflow_file}" && -f "${workflow_file}" ]]
+          then
+            detected="$(grep -h -E '^[[:space:]]*-?[[:space:]]*uses:.*github-workflow-terraform-config' -- "${workflow_file}" | head -1 | sed -E 's/^[^@]*@//; s/[[:space:]#].*$//; s/["'\'']//g' || true)"
+          fi
+
+          if [[ "${detected}" =~ ^(v[0-9][A-Za-z0-9._-]*|main)$ ]]
+          then
+            workflow_tag="${detected}"
+          else
+            echo "Workflow ref '${detected}' is not a release tag or main; using main"
+            workflow_tag="main"
+          fi
+          echo "workflow_tag=${workflow_tag}" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
       - name: Checkout workflow
         id: checkout_workflow
         uses: actions/checkout@v6.0.3
