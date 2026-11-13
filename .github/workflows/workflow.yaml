@@ -127,9 +127,9 @@ jobs:
           terraform_token=$(jq -r .token <<<$token)
           echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: hashicorp/setup-terraform@v4.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -216,7 +216,7 @@ jobs:
           fi
 
       - name: cache terraform modules and providers
-        uses: actions/cache@v5.0.5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ${{ inputs.working-directory }}/.terraform/modules/
@@ -252,11 +252,11 @@ jobs:
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
         # workaround for https://github.com/hashicorp/terraform/issues/28490
-      - uses: actions/setup-go@v6.5.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.16.15"
 
-      - uses: bendrucker/terraform-configuration-aliases-action@v1.3.0
+      - uses: bendrucker/terraform-configuration-aliases-action@a317089a1c5bb9d42f541471f1662bbfc2b167cb # v1.3.0
         with:
           path: ${{ inputs.working-directory }}
 
@@ -282,7 +282,7 @@ jobs:
           echo "validate=${validate}" >> $GITHUB_OUTPUT
 
       - name: Post/update results as comment
-        uses: edumserrano/find-create-or-update-comment@v3.0.0
+        uses: edumserrano/find-create-or-update-comment@82880b65c8a3a6e4c70aa05a204995b6c9696f53 # v3.0.0
         # This step will fail when running on the main branch, as there
         # won't be any PR or comment to find.
         continue-on-error: true
@@ -352,9 +352,9 @@ jobs:
           terraform_token=$(jq -r .token <<<$token)
           echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: hashicorp/setup-terraform@v4.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -395,7 +395,7 @@ jobs:
           fi
 
       - name: cache terraform modules and providers
-        uses: actions/cache@v5.0.5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ${{ inputs.working-directory }}/.terraform/modules/
@@ -431,7 +431,7 @@ jobs:
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
       - name: Configure Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: 3.11
 
@@ -456,7 +456,7 @@ jobs:
               print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
 
   #     - name: Scan IaC code
-  #       uses: aquasecurity/trivy-action@0.35.0
+  #       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
   #       id: trivy-scan
   #       with:
   #         exit-code: "0"
@@ -530,7 +530,7 @@ jobs:
   #     - name: Checkout
   #       uses: actions/checkout@v6.0.3
   #     - name: Submit SBOM results to Dependency Snapshots
-  #       uses: aquasecurity/trivy-action@0.35.0
+  #       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
   #       with:
   #         scan-type: "fs"
   #         format: "github"
@@ -556,12 +556,12 @@ jobs:
           terraform_docs_token=$(jq -r .token <<<$token)
           echo "terraform_docs_token=$terraform_docs_token" >> "$GITHUB_OUTPUT"
       - name: Checkout
-        uses: actions/checkout@v6.0.3
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: "${{ github.head_ref }}"
           token: ${{ steps.credentials.outputs.terraform_docs_token }}
       - name: setup uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: Install yq
         run: uv tool install yq
       - name: Get workflow ref
@@ -585,7 +585,7 @@ jobs:
           cat $GITHUB_OUTPUT
       - name: Checkout workflow
         id: checkout_workflow
-        uses: actions/checkout@v6.0.3
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: nrkno/github-workflow-terraform-config
           ref: ${{ steps.workflow_tag.outputs.workflow_tag }}
@@ -608,7 +608,7 @@ jobs:
         run: |
           rm -rf -- .github-workflow-terraform-config
       - name: Render terraform docs and push
-        uses: terraform-docs/gh-actions@v1.4.1
+        uses: terraform-docs/gh-actions@6de6da0cefcc6b4b7a5cbea4d79d97060733093c # v1.4.1
         with:
           working-dir: ${{ inputs.working-directory }}
           config-file: ${{ inputs.terraform-docs-config-file }}
@@ -636,7 +636,7 @@ jobs:
             echo "changes_detected=true" >> $GITHUB_OUTPUT
           fi
 
-      - uses: planetscale/ghcommit-action@v0.2.22
+      - uses: planetscale/ghcommit-action@a6b150b81dca5dd027baa898604418eec9e11465 # v0.2.22
         if: steps.check_for_changes.outputs.changes_detected == 'true'
         with:
           commit_message: ${{ inputs.terraform-docs-git-commit-message }}
