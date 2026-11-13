@@ -616,11 +616,22 @@ jobs:
         shell: bash
         env:
           WORKFLOW_REF: ${{ inputs.workflow-ref }}
+          CALLER_REPOSITORY: ${{ github.repository }}
         run: |
-          # An explicit input comes from the caller, not from the pull request.
+          # An explicit input gets the same rules as auto-detection: a release tag
+          # (v1, v4.121.0) or main. A commit SHA is accepted only in this
+          # repository's own self-test (test.yaml passes github.sha), where the
+          # workflow under test is not released yet. Anything else uses main.
           if [[ -n "${WORKFLOW_REF}" ]]
           then
-            echo "workflow_tag=${WORKFLOW_REF}" >> "$GITHUB_OUTPUT"
+            if [[ "${WORKFLOW_REF}" =~ ^(v[0-9][A-Za-z0-9._-]*|main)$ ]] ||
+               [[ "${CALLER_REPOSITORY}" == "nrkno/github-workflow-terraform-config" && "${WORKFLOW_REF}" =~ ^[0-9a-f]{40}$ ]]
+            then
+              echo "workflow_tag=${WORKFLOW_REF}" >> "$GITHUB_OUTPUT"
+            else
+              echo "Workflow ref '${WORKFLOW_REF}' is not a release tag or main; using main"
+              echo "workflow_tag=main" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
 
@@ -663,12 +674,26 @@ jobs:
         env:
           CONFIG_FILE: ${{ inputs.terraform-docs-config-file }}
         run: |
-          if [ -f "$CONFIG_FILE" ]
+          set -euo pipefail
+
+          # The file is written inside the checked-out repository, so it must be a
+          # relative path that stays in the workspace and out of .git, after
+          # resolving symlinks that the pull request may have added.
+          workspace="$(realpath -- "${GITHUB_WORKSPACE}")"
+          resolved="$(realpath -m -- "${workspace}/${CONFIG_FILE}")"
+          relative="${resolved#"${workspace}"/}"
+          if [[ -z "${CONFIG_FILE}" || "${CONFIG_FILE}" == /* || "${resolved}" != "${workspace}"/* || "/${relative}/" == */.git/* ]]
           then
-            echo "Using callers configuration for commitlint"
+            echo "::error::terraform-docs-config-file must be a relative path inside the repository and outside .git"
+            exit 1
+          fi
+
+          if [ -f "${CONFIG_FILE}" ]
+          then
+            echo "Using the caller's configuration for terraform-docs"
           else
-            echo "Using workflow configuration for commitlint"
-            cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" "$CONFIG_FILE"
+            echo "Using the workflow's configuration for terraform-docs"
+            install -m 0644 -- "${workspace}/.github-workflow-terraform-config/.terraform-docs.yaml" "${resolved}"
           fi
       - name: Remove workflow checkout
         shell: bash
@@ -743,6 +768,10 @@ jobs:
       # The push token is fetched here, used by this one step, and masked from the
       # moment it exists. It is passed to the container by name (--env GITHUB_TOKEN),
       # so it is not on any command line, and the container sees only the workspace.
+      # ghcommit reads GITHUB_GRAPHQL_URL to find the API, so the runner's GitHub
+      # URLs are passed through too; without it every push fails. The upstream
+      # action received every GITHUB_* variable. The terraform-docs image reads
+      # only GITHUB_WORKSPACE and GITHUB_OUTPUT, which the render step sets.
       # Image: the one planetscale/ghcommit-action v0.2.22 builds from, pinned by
       # digest. Keep IMAGE in sync with .github/images/ghcommit/Dockerfile.
       - name: Commit documentation changes
@@ -775,5 +804,6 @@ jobs:
             --env GITHUB_WORKSPACE=/github/workspace \
             --env GITHUB_OUTPUT=/dev/null \
             --env GITHUB_TOKEN \
+            --env GITHUB_GRAPHQL_URL --env GITHUB_API_URL --env GITHUB_SERVER_URL \
             "${IMAGE}" \
             "${COMMIT_MESSAGE}" "${REPOSITORY}" "${BRANCH}" true . .

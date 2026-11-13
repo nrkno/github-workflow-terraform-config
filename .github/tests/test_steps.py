@@ -125,13 +125,13 @@ class RemoveIgnoredFiles(StepCase):
 
 
 class WorkflowRef(StepCase):
-    def detect(self, caller_text, *, workflow_ref=""):
+    def detect(self, caller_text, *, workflow_ref="", repository="acme/infra"):
         repo = self.tmp / "caller"
         (repo / ".github/workflows").mkdir(parents=True, exist_ok=True)
         (repo / ".github/workflows/ci.yaml").write_text(caller_text)
         r = self.run_step(
             "terraform-docs", "Get workflow ref", cwd=repo,
-            env={"WORKFLOW_REF": workflow_ref, "GITHUB_WORKFLOW": "ci"},
+            env={"WORKFLOW_REF": workflow_ref, "GITHUB_WORKFLOW": "ci", "CALLER_REPOSITORY": repository},
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         out = [l for l in self.out.read_text().splitlines() if l.startswith("workflow_tag=")]
@@ -162,8 +162,80 @@ class WorkflowRef(StepCase):
     def test_no_reference_falls_back_to_main(self):
         self.assertEqual(self.detect("name: ci\njobs: {}\n"), "main")
 
-    def test_explicit_input_wins(self):
-        self.assertEqual(self.detect(self.caller("feature/evil"), workflow_ref="deadbeef"), "deadbeef")
+    def test_explicit_input_follows_the_same_rules(self):
+        caller = self.caller("v4")
+        for ref in ("v4", "v4.121.0", "main"):
+            self.assertEqual(self.detect(caller, workflow_ref=ref), ref)
+        for ref in ("feature/evil", "refs/heads/x", "v4;id", "$(touch PWNED)", "-x", "a" * 40, "deadbeef"):
+            self.assertEqual(self.detect(caller, workflow_ref=ref), "main", ref)
+        self.assertFalse((self.tmp / "caller" / "PWNED").exists())
+
+    def test_self_test_sha_only_in_this_repository(self):
+        sha = "0123456789abcdef0123456789abcdef01234567"
+        own = "nrkno/github-workflow-terraform-config"
+        self.assertEqual(self.detect(self.caller("v4"), workflow_ref=sha, repository=own), sha)
+        self.assertEqual(self.detect(self.caller("v4"), workflow_ref=sha, repository="acme/infra"), "main")
+        # Only a full lowercase SHA qualifies, even in this repository.
+        for ref in ("0123abc", sha.upper(), sha + "0", "feature/evil"):
+            self.assertEqual(self.detect(self.caller("v4"), workflow_ref=ref, repository=own), "main", ref)
+
+
+class SetConfiguration(StepCase):
+    def setUp(self):
+        super().setUp()
+        self.ws = self.tmp / "ws"
+        (self.ws / ".github-workflow-terraform-config").mkdir(parents=True)
+        (self.ws / ".github-workflow-terraform-config" / ".terraform-docs.yaml").write_text("formatter: markdown\n")
+        (self.ws / ".git" / "hooks").mkdir(parents=True)
+        (self.ws / "sub").mkdir()
+        self.secret = self.tmp / "secret"
+        self.secret.write_text("keep")
+
+    def configure(self, value):
+        return self.run_step(
+            "terraform-docs", "Set configuration", cwd=self.ws,
+            env={"CONFIG_FILE": value, "GITHUB_WORKSPACE": str(self.ws)},
+        )
+
+    def test_copies_default_config_with_mode_0644(self):
+        os.umask(0o077)
+        r = self.configure(".terraform-docs.yaml")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        target = self.ws / ".terraform-docs.yaml"
+        self.assertEqual(target.read_text(), "formatter: markdown\n")
+        self.assertEqual(target.stat().st_mode & 0o777, 0o644)
+
+    def test_callers_config_is_kept(self):
+        (self.ws / "sub" / "own.yaml").write_text("mine")
+        r = self.configure("sub/own.yaml")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.ws / "sub" / "own.yaml").read_text(), "mine")
+
+    def test_nested_relative_path_is_allowed(self):
+        r = self.configure("sub/docs.yaml")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.ws / "sub" / "docs.yaml").exists())
+
+    def test_rejects_paths_outside_the_workspace_or_in_git(self):
+        (self.ws / "link-out").symlink_to(self.tmp)
+        (self.ws / "link-git").symlink_to(self.ws / ".git" / "hooks")
+        (self.ws / "dangling").symlink_to(self.tmp / "new-target")
+        for value in ("", "/etc/passwd", str(self.tmp / "x"), "../x", "sub/../../x",
+                      ".git/hooks/pre-commit", ".git", "sub/../.git/config", "link-out/x",
+                      "link-git/pre-commit", "dangling", "..", "."):
+            r = self.configure(value)
+            self.assertNotEqual(r.returncode, 0, value)
+        self.assertFalse((self.tmp / "x").exists())
+        self.assertFalse((self.tmp / "new-target").exists())
+        self.assertEqual(list((self.ws / ".git" / "hooks").iterdir()), [])
+        self.assertEqual(self.secret.read_text(), "keep")
+
+    def test_existing_symlink_is_replaced_not_followed(self):
+        (self.ws / "cfg.yaml").symlink_to(self.secret)
+        # The link resolves outside the workspace, so it is rejected before any write.
+        r = self.configure("cfg.yaml")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(self.secret.read_text(), "keep")
 
 
 class Tokens(StepCase):

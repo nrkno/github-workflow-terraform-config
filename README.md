@@ -119,7 +119,7 @@ grant `contents: write` to use `trivy-sbom-enabled`.
 
 `.github/tests/test_steps.py` runs the workflow's shell and Python steps against
 hostile input (token handling, `terraform-ignore-files`, workflow-ref detection, git
-credentials). CI runs it on pull requests that touch `workflow.yaml`. Locally:
+credentials). CI runs it on pull requests that touch `workflow.yaml`. `test_containers.py` also runs both pinned images (with a fake token, ghcommit must be refused with 401) and runs in CI only when `RUN_CONTAINER_TESTS=1`; it needs Docker and network access. Locally:
 
 ```sh
 python -I -m unittest discover -s .github/tests

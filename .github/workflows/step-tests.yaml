@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/workflow.yaml'
       - '.github/tests/**'
+      - '.github/images/**'
 
 permissions: {}
 
@@ -27,3 +28,26 @@ jobs:
         run: python -I -m pip install pyyaml==6.0.3
       - name: Run tests
         run: python -I -m unittest discover -s .github/tests -v
+
+  container-smoke:
+    name: Run the pinned container images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
+      - name: Configure Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: python -I -m pip install pyyaml==6.0.3
+      - name: Run container tests
+        # Pulls both images. ghcommit is run with a fake token and must be refused by
+        # the GitHub API with 401, which proves the container can reach it.
+        env:
+          RUN_CONTAINER_TESTS: "1"
+        run: python -I -m unittest discover -s .github/tests -p 'test_containers.py' -v
