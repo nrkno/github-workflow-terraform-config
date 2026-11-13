@@ -1,0 +1,29 @@
+---
+name: Actions lockfile
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Verify actions.lock
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install gh-actions-lock
+        # Pinned to a release tag. Offline check below needs no token.
+        run: gh extension install github/gh-actions-lock --pin v0.4.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Verify lockfile covers every action reference
+        # If this fails, run `gh actions-lock` locally and commit .github/workflows/actions.lock.
+        run: gh actions-lock --verify-local
