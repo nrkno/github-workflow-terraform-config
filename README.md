@@ -82,3 +82,25 @@ Keep them pinned to a full commit SHA with a `# vX.Y.Z` comment.
 The `Actions lockfile` workflow runs `gh actions-lock --verify-local` on PRs that
 touch `.github/workflows/` and fails if an action reference has no lockfile
 entry. Do not edit the lockfile by hand.
+
+## Pinned container images
+
+The terraform-docs and commit steps run container images with `docker run`, pinned
+by digest, instead of the third-party actions that pulled them by tag. The
+references are the `IMAGE` values in `.github/workflows/workflow.yaml`. Dependabot
+cannot read `docker run` lines, so it tracks the same references in
+`.github/images/*/Dockerfile` (never built). When it bumps one, copy the new
+reference into the matching `IMAGE` value; the `image-pins` job in the
+`Actions lockfile` workflow fails until the two agree.
+
+The terraform-docs job fetches its push token only in the commit step, masks it
+at once, and passes it to the container by name. The runner needs Docker, as it
+did for the previous actions.
+
+## Trivy
+
+The IaC scan and the optional SBOM job use `aquasecurity/trivy-action` v0.36.0
+with Trivy `v0.70.0`, both released after the March 2026 tag compromise
+(GHSA-69fq-xp46-6x23). Do not move either pin to a mutable reference. The SBOM
+job submits to the Dependency Graph with the caller's token, so the caller must
+grant `contents: write` to use `trivy-sbom-enabled`.
