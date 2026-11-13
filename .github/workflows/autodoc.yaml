@@ -4,57 +4,93 @@ on:
       - main
 
 name: Autodoc
+
+# The default token is read-only; the job below opts in to what it needs.
 permissions: {}
 
 jobs:
   autodoc:
     name: Update workflow documentation
     runs-on: ubuntu-latest
+    # Fork PRs have no access to the deploy key.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     # The push uses the deploy key, not the workflow token.
     permissions:
       contents: read
     steps:
-      -
-        name: Configure Python
+      # Trust model: pull request content (checked out under `head/`) is DATA
+      # ONLY. Nothing from it is executed or imported, and no credential is on
+      # disk or in the agent while it is processed.
+      #
+      # - Python is always started with `-I` (isolated mode: no CWD, script
+      #   directory or PYTHON* variables on sys.path), and never from inside
+      #   `head/`. `python -m pip` from a directory the PR controls would import
+      #   a PR-supplied `pip/__main__.py`.
+      # - The script comes from the trusted base commit and parses the workflow
+      #   with the safe YAML loader.
+      # - The deploy key is loaded only for the final push step, which runs git
+      #   and nothing else.
+      - name: Checkout trusted base
+        uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: Checkout pull request head
+        uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          path: head
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure Python
         uses: actions/setup-python@v6.3.0
         with:
           python-version: "3.14"
-      -
-        name: Checkout
-        uses: actions/checkout@v6.0.3
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-          ssh-key: "${{ secrets.SSH_KEY_AUTODOC }}"
-      -
-        # The generator comes from the base branch, never from the pull request, so
-        # code from a branch does not run while the deploy key is loaded.
-        name: Update documentation
-        env:
-          BASE_REF: ${{ github.base_ref }}
+      - name: Install dependencies
+        # Runs in the workspace root, which holds only `base/` and `head/`.
+        run: python -I -m pip install pyyaml==6.0.3
+      - name: Update documentation
+        id: docs
         run: |
-          python -m pip install pyyaml==6.0.3
-          mkdir -p "${RUNNER_TEMP}/autodoc"
-          git show "origin/${BASE_REF}:.github/scripts/autodoc.py" > "${RUNNER_TEMP}/autodoc/autodoc.py"
-          python "${RUNNER_TEMP}/autodoc/autodoc.py" .github/workflows/workflow.yaml README.md
-      -
-        # The key is loaded only for the commit and push.
-        name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
-      -
-        name: Commit and push documentation
-        run: |
+          # The PR could replace the inputs, or a directory on their path such
+          # as `.github`, with symlinks that point outside the checkout. Each
+          # path must resolve to exactly itself under the real `head/`.
+          head_real="$(realpath head)"
+          for f in .github/workflows/workflow.yaml README.md
+          do
+            if [[ ! -f "head/$f" || "$(realpath -e "head/$f")" != "${head_real}/$f" ]]
+            then
+              echo "::error::$f must be a regular file with no symlinked path component"
+              exit 1
+            fi
+          done
+
+          python -I base/.github/scripts/autodoc.py head/.github/workflows/workflow.yaml head/README.md
+
           # Exit early if no changes were made
-          if [[ -z "$(git status --porcelain README.md)" ]]
+          if [[ -z "$(git -C head status --porcelain README.md)" ]]
           then
             echo "Nothing to do!"
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "docs: update readme with autodoc"
-          git push
+          git -C head config user.name "github-actions[bot]"
+          git -C head config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C head add README.md
+          git -C head -c core.hooksPath=/dev/null commit -m "docs: update readme with autodoc"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - if: steps.docs.outputs.changed == 'true'
+        name: Load deploy key
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
+      - if: steps.docs.outputs.changed == 'true'
+        name: Push documentation update
+        # The only step that can use the key. It runs git and nothing else.
+        env:
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git -C head remote set-url origin "git@github.com:${REPOSITORY}.git"
+          git -C head -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/${HEAD_REF}"
