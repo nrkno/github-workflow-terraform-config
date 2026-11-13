@@ -11,17 +11,17 @@ jobs:
     steps:
       -
         name: Setup SSH agent
-        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
       -
         name: Configure Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@v6.3.0
         with:
           python-version: 3.11
       -
         name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@v6.0.3
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
