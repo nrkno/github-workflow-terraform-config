@@ -1,9 +1,15 @@
----
 on: [push, pull_request]
 
 name: Commit lint and release
 jobs:
   lint_release:
-    uses: nrkno/github-workflow-semantic-release/.github/workflows/workflow.yaml@b97399abef4d6647db11798db6d81e623b862615 # v4.19.0
+    # TODO(bump): security/sweep-2026-11 in github-workflow-semantic-release is
+    # unreleased. Pin the SHA of the next release.
+    # Permissions are the maximum the called workflow's jobs request (release:
+    # contents write, pull-requests read). A caller cannot grant less than that.
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: nrkno/github-workflow-semantic-release/.github/workflows/workflow.yaml@6a8585e39eabcb53cdbdebfcc76eb9672199089e # v5.1.5
     with:
       runs-on: ubuntu-latest
