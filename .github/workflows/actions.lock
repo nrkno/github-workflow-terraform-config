@@ -8,7 +8,6 @@ workflows:
     '.github/workflows/autodoc.yaml':
         - 'actions/checkout@v6.0.3'
         - 'actions/setup-python@v6.3.0'
-        - 'webfactory/ssh-agent@v0.10.0'
     '.github/workflows/lint-release.yaml': []
     '.github/workflows/step-tests.yaml':
         - 'actions/checkout@v6.0.3'
@@ -108,8 +107,3 @@ dependencies:
         commit: 'sha1-d5fe37641ad8451bdd80312415672ba26c86575e'
         owner_id: 18365890
         repo_id: 256447541
-    'webfactory/ssh-agent@v0.10.0':
-        ref: 'v0.10.0'
-        commit: 'sha1-e83874834305fe9a4a2997156cb26c5de65a8555'
-        owner_id: 135788
-        repo_id: 208510314

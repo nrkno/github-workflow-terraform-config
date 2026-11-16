@@ -1,5 +1,5 @@
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
 
@@ -12,15 +12,18 @@ jobs:
   autodoc:
     name: Update workflow documentation
     runs-on: ubuntu-latest
-    # Fork PRs have no access to the deploy key.
+    # Only same-repository branches are authorized push targets.
     if: github.event.pull_request.head.repo.full_name == github.repository
-    # The push uses the deploy key, not the workflow token.
     permissions:
-      contents: read
+      contents: write
+    env:
+      GIT_CONFIG_NOSYSTEM: 1
+      GIT_CONFIG_GLOBAL: /dev/null
     steps:
       # Trust model: pull request content (checked out under `head/`) is DATA
       # ONLY. Nothing from it is executed or imported, and no credential is on
-      # disk or in the agent while it is processed.
+      # persisted in the checkout. The workflow itself comes from the base
+      # branch via pull_request_target, not from the pull request.
       #
       # - Python is always started with `-I` (isolated mode: no CWD, script
       #   directory or PYTHON* variables on sys.path), and never from inside
@@ -28,8 +31,8 @@ jobs:
       #   a PR-supplied `pip/__main__.py`.
       # - The script comes from the trusted base commit and parses the workflow
       #   with the safe YAML loader.
-      # - The deploy key is loaded only for the final push step, which runs git
-      #   and nothing else.
+      # - The token is passed to git only in the final push step. The job's
+      #   token is write-capable throughout, so PR content must remain data.
       - name: Checkout trusted base
         uses: actions/checkout@v6.0.3
         with:
@@ -39,7 +42,7 @@ jobs:
       - name: Checkout pull request head
         uses: actions/checkout@v6.0.3
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           path: head
           fetch-depth: 0
           persist-credentials: false
@@ -81,16 +84,28 @@ jobs:
           git -C head -c core.hooksPath=/dev/null commit -m "docs: update readme with autodoc"
           echo "changed=true" >> "$GITHUB_OUTPUT"
       - if: steps.docs.outputs.changed == 'true'
-        name: Load deploy key
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
-      - if: steps.docs.outputs.changed == 'true'
         name: Push documentation update
-        # The only step that can use the key. It runs git and nothing else.
         env:
           REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git -C head remote set-url origin "git@github.com:${REPOSITORY}.git"
-          git -C head -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/${HEAD_REF}"
+          git check-ref-format "refs/heads/${HEAD_REF}"
+          git -C head remote set-url origin "${SERVER_URL}/${REPOSITORY}.git"
+          # Use environment-based git configuration so the token is not stored
+          # on disk or exposed in the process arguments.
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          remote_head="$(git -C head ls-remote --exit-code --refs origin "refs/heads/${HEAD_REF}")"
+          if [[ "${remote_head%%$'\t'*}" != "$HEAD_SHA" ]]
+          then
+            echo '::error::Pull request branch changed; refusing to push documentation'
+            exit 1
+          fi
+          git -C head -c core.hooksPath=/dev/null push \
+            --force-with-lease="refs/heads/${HEAD_REF}:${HEAD_SHA}" \
+            origin "HEAD:refs/heads/${HEAD_REF}"

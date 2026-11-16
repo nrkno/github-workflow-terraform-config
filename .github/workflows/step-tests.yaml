@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/workflow.yaml'
+      - '.github/workflows/autodoc.yaml'
+      - '.github/scripts/autodoc.py'
       - '.github/tests/**'
       - '.github/images/**'
 

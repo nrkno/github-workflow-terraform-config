@@ -62,6 +62,15 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v4.
 
 The workflow definition resides in [.github/workflows/workflow.yaml](./.github/workflows/workflow.yaml).
 
+The Autodoc workflow updates this repository's README for same-repository pull
+requests. It runs the workflow and generator from the trusted base, reads the
+pull request as data, and uses the job's `GITHUB_TOKEN` with `contents: write`
+to push only if the branch still points to the event's head commit. Fork pull
+requests are not updated. A push made with `GITHUB_TOKEN` does not trigger new
+workflow runs, so the generated commit does not automatically rerun checks;
+reviewers must account for this when requiring checks on the final commit.
+Repository Actions settings and branch rules must allow the token to push.
+
 ## References
 
 - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputs
