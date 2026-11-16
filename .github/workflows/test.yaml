@@ -18,6 +18,7 @@ jobs:
       working-directory: ./test/terraform
       runs-on: ubuntu-latest
       terraform-docs-fail-on-diff: false
+      terraform-docs-git-push: false
       workflow-ref: "${{ github.sha }}"
 
   # Runs Trivy scan against a vulnerable config.
@@ -25,6 +26,7 @@ jobs:
     uses: ./.github/workflows/workflow.yaml
     with:
       terraform-job-enabled: false
+      terraform-docs-git-push: false
       trivy-error-is-success: true
       working-directory: ./test/trivy
       runs-on: ubuntu-latest
