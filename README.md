@@ -171,11 +171,14 @@ CLI release.
 The local suite runs the workflow's shell and Python steps against hostile input
 and tests Autodoc with a scratch Git remote, not GitHub. It also checks the YAML
 for both privileged self-tests: a draft or missing draft status must not start
-either call, and both calls disable docs pushes. An offline check runs the
-guarded docs commit step with fake commands to verify that the step requests
-and uses its App token. These tests do not run the privileged workflows, use
-real credentials, or verify token-service authorization. `Step tests` runs them
-on relevant pull requests, including changes to `test.yaml`.
+either call, and both calls disable docs pushes. A YAML check verifies that
+only the guarded commit step names the docs token endpoint directly. An offline
+test runs that step with fake network and Docker commands. It checks that the
+step requests a synthetic token, supplies it in the Docker command's environment,
+and passes an argument telling Docker to forward it by name to the container.
+These tests do not start a container, run the privileged workflows, use real
+credentials, or verify token-service authorization. `Step tests` runs them on
+relevant pull requests, including changes to `test.yaml`.
 
 The separate container smoke tests need Docker and network access and run only
 with `RUN_CONTAINER_TESTS=1`. They check that the pinned terraform-docs image

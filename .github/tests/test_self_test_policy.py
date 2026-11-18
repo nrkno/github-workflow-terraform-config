@@ -6,6 +6,7 @@ import unittest
 import yaml
 
 WORKFLOWS = pathlib.Path(__file__).resolve().parents[1] / "workflows"
+DOCS_COMMIT_STEP = "Commit documentation changes"
 
 
 class SelfTestPolicy(unittest.TestCase):
@@ -32,10 +33,28 @@ class SelfTestPolicy(unittest.TestCase):
         steps = {step.get("name"): step for step in workflow["jobs"]["terraform-docs"]["steps"]}
         render = steps["Render terraform docs"]
         changes = steps["Check for changes"]
-        commit = steps["Commit documentation changes"]
+        commit = steps[DOCS_COMMIT_STEP]
 
         self.assertEqual(render["env"]["INPUT_GIT_PUSH"], "false")
         # A skipped change check produces no output, so the step that requests
         # the docs App token and pushes must require an explicit 'true' output.
         self.assertEqual(changes.get("if"), "${{ inputs.terraform-docs-git-push }}")
         self.assertEqual(commit.get("if"), f"steps.{changes['id']}.outputs.changes_detected == 'true'")
+
+    def test_only_the_guarded_commit_step_names_the_docs_token_endpoint(self):
+        endpoint = "/workflow_terraform_docs_token"
+        for path in sorted(WORKFLOWS.iterdir()):
+            if path.suffix not in {".yaml", ".yml"}:
+                continue
+            with self.subTest(workflow=path.name):
+                workflow = yaml.safe_load(path.read_text())
+                if path.name == "workflow.yaml":
+                    steps = workflow["jobs"]["terraform-docs"]["steps"]
+                    commit = next(step for step in steps if step.get("name") == DOCS_COMMIT_STEP)
+                    self.assertTrue(endpoint in yaml.safe_dump(commit), "Missing docs token endpoint")
+                    steps.remove(commit)
+                # Inspect parsed values, including env and inputs, not comments.
+                self.assertFalse(
+                    endpoint in yaml.safe_dump(workflow),
+                    "The docs token endpoint is named outside the guarded commit step",
+                )

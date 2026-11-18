@@ -296,6 +296,25 @@ esac
 """,
             "docker": """
 [[ "$GITHUB_TOKEN" == fake-docs-app-token ]] || exit 1
+[[ "${1-}" == run ]] || exit 1
+shift
+forwarded=false
+# Arguments after the image are for the container command, not Docker.
+while (( $# )) && [[ "$1" != "$IMAGE" ]]; do
+  case "$1" in
+    --env|-e)
+      if [[ "${2-}" == GITHUB_TOKEN ]]; then forwarded=true; fi
+      shift
+      ;;
+    --env=GITHUB_TOKEN|-eGITHUB_TOKEN) forwarded=true ;;
+    --workdir|--volume) shift ;;
+  esac
+  shift
+done
+if [[ $# -eq 0 || "$forwarded" != true ]]; then
+  echo "Docker run did not forward GITHUB_TOKEN by name" >&2
+  exit 1
+fi
 printf '%s\\n' docker >> "$CALLS"
 """,
         }.items():
