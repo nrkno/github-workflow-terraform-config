@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   id-token: write
@@ -11,20 +12,27 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Both calls can mint internal credentials and execute PR-controlled Terraform
+  # providers. Defer them on drafts until service authorization is resolved;
+  # marking the PR ready automatically starts the normal tests.
   # Runs both Terraform checks and Trivy scan against a valid configuration.
   terraform-valid:
+    if: toJSON(github.event.pull_request.draft) == 'false'
     uses: ./.github/workflows/workflow.yaml
     with:
       working-directory: ./test/terraform
       runs-on: ubuntu-latest
       terraform-docs-fail-on-diff: false
+      terraform-docs-git-push: false
       workflow-ref: "${{ github.sha }}"
 
   # Runs Trivy scan against a vulnerable config.
   trivy-invalid:
+    if: toJSON(github.event.pull_request.draft) == 'false'
     uses: ./.github/workflows/workflow.yaml
     with:
       terraform-job-enabled: false
+      terraform-docs-git-push: false
       trivy-error-is-success: true
       working-directory: ./test/trivy
       runs-on: ubuntu-latest

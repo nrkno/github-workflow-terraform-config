@@ -1,46 +1,111 @@
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - main
 
 name: Autodoc
+
+# The default token is read-only; the job below opts in to what it needs.
+permissions: {}
+
 jobs:
   autodoc:
     name: Update workflow documentation
     runs-on: ubuntu-latest
+    # Only same-repository branches are authorized push targets.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    env:
+      GIT_CONFIG_NOSYSTEM: 1
+      GIT_CONFIG_GLOBAL: /dev/null
     steps:
-      -
-        name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: "${{ secrets.SSH_KEY_AUTODOC }}"
-      -
-        name: Configure Python
-        uses: actions/setup-python@v6.3.0
-        with:
-          python-version: 3.11
-      -
-        name: Checkout
+      # Trust model: pull request content (checked out under `head/`) is DATA
+      # ONLY. Nothing from it is executed or imported, and no credential is on
+      # persisted in the checkout. The workflow itself comes from the base
+      # branch via pull_request_target, not from the pull request.
+      #
+      # - Python is always started with `-I` (isolated mode: no CWD, script
+      #   directory or PYTHON* variables on sys.path), and never from inside
+      #   `head/`. `python -m pip` from a directory the PR controls would import
+      #   a PR-supplied `pip/__main__.py`.
+      # - The script comes from the trusted base commit and parses the workflow
+      #   with the safe YAML loader.
+      # - The token is passed to git only in the final push step. The job's
+      #   token is write-capable throughout, so PR content must remain data.
+      - name: Checkout trusted base
         uses: actions/checkout@v6.0.3
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: Checkout pull request head
+        uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
           fetch-depth: 0
-          ssh-key: "${{ secrets.SSH_KEY_AUTODOC }}"
-      -
-        name: Update documentation
+          persist-credentials: false
+      - name: Configure Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        # Runs in the workspace root, which holds only `base/` and `head/`.
+        run: python -I -m pip install pyyaml==6.0.3
+      - name: Update documentation
+        id: docs
         run: |
-          python -m pip install -U pyyaml
-          python .github/scripts/autodoc.py .github/workflows/workflow.yaml README.md
+          # The PR could replace the inputs, or a directory on their path such
+          # as `.github`, with symlinks that point outside the checkout. Each
+          # path must resolve to exactly itself under the real `head/`.
+          head_real="$(realpath head)"
+          for f in .github/workflows/workflow.yaml README.md
+          do
+            if [[ ! -f "head/$f" || "$(realpath -e "head/$f")" != "${head_real}/$f" ]]
+            then
+              echo "::error::$f must be a regular file with no symlinked path component"
+              exit 1
+            fi
+          done
+
+          python -I base/.github/scripts/autodoc.py head/.github/workflows/workflow.yaml head/README.md
 
           # Exit early if no changes were made
-          if [[ -z "$(git status --porcelain README.md)" ]]
+          if [[ -z "$(git -C head status --porcelain README.md)" ]]
           then
             echo "Nothing to do!"
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "docs: update readme with autodoc"
-          git push
+          git -C head config user.name "github-actions[bot]"
+          git -C head config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C head add README.md
+          git -C head -c core.hooksPath=/dev/null commit -m "docs: update readme with autodoc"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - if: steps.docs.outputs.changed == 'true'
+        name: Push documentation update
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git check-ref-format "refs/heads/${HEAD_REF}"
+          git -C head remote set-url origin "${SERVER_URL}/${REPOSITORY}.git"
+          # Use environment-based git configuration so the token is not stored
+          # on disk or exposed in the process arguments.
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          remote_head="$(git -C head ls-remote --exit-code --refs origin "refs/heads/${HEAD_REF}")"
+          if [[ "${remote_head%%$'\t'*}" != "$HEAD_SHA" ]]
+          then
+            echo '::error::Pull request branch changed; refusing to push documentation'
+            exit 1
+          fi
+          git -C head -c core.hooksPath=/dev/null push \
+            --force-with-lease="refs/heads/${HEAD_REF}:${HEAD_SHA}" \
+            origin "HEAD:refs/heads/${HEAD_REF}"

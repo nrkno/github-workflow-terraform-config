@@ -108,11 +108,12 @@ jobs:
           export IFS=';'
           for registry in $REGISTRIES
           do
-            echo $registry
-            IFS="=" read domain token <<<$registry
-            tokenvar="TF_TOKEN_$(tr . _ <<<$domain | sed s/-/__/g)"
-            echo "Setting ${tokenvar} for ${domain}"
+            # Do not print the entry: it holds the token, and the secret as a whole
+            # is masked by GitHub but a single entry of it is not.
+            IFS="=" read -r domain token <<<"$registry"
             echo "::add-mask::${token}"
+            tokenvar="TF_TOKEN_$(tr . _ <<<"$domain" | sed s/-/__/g)"
+            echo "Setting ${tokenvar} for ${domain}"
             echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
           done
 
@@ -120,14 +121,24 @@ jobs:
         id: credentials
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          GITHUB_TOKEN=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
-          token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
-          terraform_token=$(jq -r .token <<<$token)
-          echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
+          # Mask every secret the moment it exists, before anything can print it.
+          oidc_token=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
+          echo "::add-mask::${oidc_token}"
+          response=$(curl -sS --fail -H "Authorization: Bearer ${oidc_token}" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
+          terraform_token=$(jq -r .token <<<"${response}")
+          if [ -z "${terraform_token}" ] || [ "${terraform_token}" = "null" ]
+          then
+            echo "::error::The token service returned no token"
+            exit 1
+          fi
+          echo "::add-mask::${terraform_token}"
+          echo "terraform_token=${terraform_token}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
 
       - uses: hashicorp/setup-terraform@v4.0.1
         with:
@@ -137,7 +148,7 @@ jobs:
       # Delete ignored files inside repo before running Terraform.
       # It should not be possible to delete files outside of the repository root.
       - name: Remove ignored files
-        if: inputs.ignore-files != ''
+        if: inputs.terraform-ignore-files != ''
         env:
           IGNORE_FILES: ${{ inputs.terraform-ignore-files }}
         shell: python
@@ -148,20 +159,22 @@ jobs:
           import shutil
 
           fpaths = os.getenv("IGNORE_FILES", "")
-          for fpath in [s.strip() for s in fpaths.split(",") if s]:
-            # Make sure we only delete files in repo root
-            safe_dir = os.getcwd() + os.sep
-            if not os.path.commonprefix((os.path.realpath(fpath),safe_dir)) == safe_dir:
-              raise ValueError(f"Not allowed to delete path outside of repo root: {fpath}")
+          # Strip first, then drop empty entries: "a.tf, " has an empty last entry.
+          for fpath in [s for s in (s.strip() for s in fpaths.split(",")) if s]:
+            # Make sure we only delete paths strictly inside the working directory
+            root = os.path.realpath(os.getcwd())
+            target = os.path.realpath(fpath)
+            if target == root or os.path.commonpath((root, target)) != root:
+              raise ValueError(f"Not allowed to delete path outside of working directory: {fpath}")
 
             # Delete path
             p = pathlib.Path(fpath)
-            if p.is_file():
+            if p.is_symlink() or p.is_file():
               p.unlink()
-              print("deleted file:", p.name)
+              print("deleted file:", p)
             elif p.is_dir():
-              shutil.rmtree(p.name)
-              print("deleted directory:", p.name)
+              shutil.rmtree(p)
+              print("deleted directory:", p)
 
       - name: terraform version
         shell: bash
@@ -189,17 +202,21 @@ jobs:
         run: |
           set +e
 
+          # A private global git config for this job. The runner's ~/.gitconfig is
+          # never modified, so nothing is left behind if the job is cancelled.
           credentials_dir=$(mktemp -d)
           echo "git_credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
           if [ -f ~/.gitconfig ]
           then
-            cp ~/.gitconfig "${credentials_dir}/"
+            cp ~/.gitconfig "${credentials_dir}/gitconfig"
           fi
-          echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials"
+          echo "GIT_CONFIG_GLOBAL=${credentials_dir}/gitconfig" >> "${GITHUB_ENV}"
+          export GIT_CONFIG_GLOBAL="${credentials_dir}/gitconfig"
+          (umask 077; echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials")
           git config --global credential.helper "store --file=${credentials_dir}/credentials"
           git config --global --replace-all 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
           git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
-          cat ~/.gitconfig
+          cat "${GIT_CONFIG_GLOBAL}"
 
       - name: Set terraform cache id
         id: cache_id
@@ -235,6 +252,7 @@ jobs:
 
       - name: Cleanup git credentials
         id: credentials_cleanup
+        if: always()
         shell: bash
         working-directory: ${{ inputs.working-directory }}
         env:
@@ -242,19 +260,21 @@ jobs:
         run: |
           set +e
 
-          if [ -f "${GIT_CREDENTIALS_DIR}/.gitconfig" ]
+          # Nothing to undo if the credentials were never loaded.
+          if [ -z "${GIT_CREDENTIALS_DIR}" ]
           then
-            cp "${GIT_CREDENTIALS_DIR}/.gitconfig" ~/.gitconfig
-          else
-            rm ~/.gitconfig
+            exit 0
           fi
+
+          # Point git at an empty global config for the rest of the job.
+          echo "GIT_CONFIG_GLOBAL=/dev/null" >> "${GITHUB_ENV}"
           shred -u "${GIT_CREDENTIALS_DIR}/credentials"
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
         # workaround for https://github.com/hashicorp/terraform/issues/28490
       - uses: actions/setup-go@v6.5.0
         with:
-          go-version: "1.16.15"
+          go-version: stable
 
       - uses: bendrucker/terraform-configuration-aliases-action@v1.3.0
         with:
@@ -272,10 +292,15 @@ jobs:
 
       - name: Set check status
         id: status
+        shell: bash
+        env:
+          FMT_EXIT_CODE: ${{ steps.fmt.outputs.exit_code }}
+          INIT_EXIT_CODE: ${{ steps.init.outputs.exit_code }}
+          VALIDATE_EXIT_CODE: ${{ steps.validate.outputs.exit_code }}
         run: |
-          if [[ ${{ steps.fmt.outputs.exit_code }}  == '0' ]]; then fmt='✔️'; else fmt='❌'; fi
-          if [[ ${{ steps.init.outputs.exit_code }}  == '0' ]]; then init='✔️'; else init='❌'; fi
-          if [[ ${{ steps.validate.outputs.exit_code }}  == '0' ]]; then validate='✔️'; else validate='❌'; fi
+          if [[ "${FMT_EXIT_CODE}" == '0' ]]; then fmt='✔️'; else fmt='❌'; fi
+          if [[ "${INIT_EXIT_CODE}" == '0' ]]; then init='✔️'; else init='❌'; fi
+          if [[ "${VALIDATE_EXIT_CODE}" == '0' ]]; then validate='✔️'; else validate='❌'; fi
 
           echo "fmt=${fmt}" >> $GITHUB_OUTPUT
           echo "init=${init}" >> $GITHUB_OUTPUT
@@ -301,13 +326,18 @@ jobs:
 
       - name: Determine job exit status
         shell: python
+        env:
+          FMT_EXIT_CODE: ${{ steps.fmt.outputs.exit_code }}
+          INIT_EXIT_CODE: ${{ steps.init.outputs.exit_code }}
+          VALIDATE_EXIT_CODE: ${{ steps.validate.outputs.exit_code }}
         run: |
+          import os
           import sys
 
           test_cases = dict(
-            fmt="${{ steps.fmt.outputs.exit_code }}",
-            init="${{ steps.init.outputs.exit_code }}",
-            validate="${{ steps.validate.outputs.exit_code }}",
+            fmt=os.environ["FMT_EXIT_CODE"],
+            init=os.environ["INIT_EXIT_CODE"],
+            validate=os.environ["VALIDATE_EXIT_CODE"],
           )
 
           failed = False
@@ -333,11 +363,12 @@ jobs:
           export IFS=';'
           for registry in $REGISTRIES
           do
-            echo $registry
-            IFS="=" read domain token <<<$registry
-            tokenvar="TF_TOKEN_$(tr . _ <<<$domain | sed s/-/__/g)"
-            echo "Setting ${tokenvar} for ${domain}"
+            # Do not print the entry: it holds the token, and the secret as a whole
+            # is masked by GitHub but a single entry of it is not.
+            IFS="=" read -r domain token <<<"$registry"
             echo "::add-mask::${token}"
+            tokenvar="TF_TOKEN_$(tr . _ <<<"$domain" | sed s/-/__/g)"
+            echo "Setting ${tokenvar} for ${domain}"
             echo "${tokenvar}=${token}" >> "${GITHUB_ENV}"
           done
 
@@ -345,14 +376,24 @@ jobs:
         id: credentials
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          GITHUB_TOKEN=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
-          token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
-          terraform_token=$(jq -r .token <<<$token)
-          echo "terraform_token=$terraform_token" >> "$GITHUB_OUTPUT"
+          # Mask every secret the moment it exists, before anything can print it.
+          oidc_token=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
+          echo "::add-mask::${oidc_token}"
+          response=$(curl -sS --fail -H "Authorization: Bearer ${oidc_token}" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_token)
+          terraform_token=$(jq -r .token <<<"${response}")
+          if [ -z "${terraform_token}" ] || [ "${terraform_token}" = "null" ]
+          then
+            echo "::error::The token service returned no token"
+            exit 1
+          fi
+          echo "::add-mask::${terraform_token}"
+          echo "terraform_token=${terraform_token}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
 
       - uses: hashicorp/setup-terraform@v4.0.1
         with:
@@ -368,17 +409,21 @@ jobs:
         run: |
           set +e
 
+          # A private global git config for this job. The runner's ~/.gitconfig is
+          # never modified, so nothing is left behind if the job is cancelled.
           credentials_dir=$(mktemp -d)
           echo "git_credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
           if [ -f ~/.gitconfig ]
           then
-            cp ~/.gitconfig "${credentials_dir}/"
+            cp ~/.gitconfig "${credentials_dir}/gitconfig"
           fi
-          echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials"
+          echo "GIT_CONFIG_GLOBAL=${credentials_dir}/gitconfig" >> "${GITHUB_ENV}"
+          export GIT_CONFIG_GLOBAL="${credentials_dir}/gitconfig"
+          (umask 077; echo "https://x-access-token:${TOKEN}@github.com" > "${credentials_dir}/credentials")
           git config --global credential.helper "store --file=${credentials_dir}/credentials"
           git config --global --replace-all 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
           git config --global --add 'url.https://github.com/.insteadOf' 'git@github.com:'
-          cat ~/.gitconfig
+          cat "${GIT_CONFIG_GLOBAL}"
 
       - name: Set terraform cache id
         id: cache_id
@@ -414,6 +459,7 @@ jobs:
 
       - name: Cleanup git credentials
         id: credentials_cleanup
+        if: always()
         shell: bash
         working-directory: ${{ inputs.working-directory }}
         env:
@@ -421,19 +467,21 @@ jobs:
         run: |
           set +e
 
-          if [ -f "${GIT_CREDENTIALS_DIR}/.gitconfig" ]
+          # Nothing to undo if the credentials were never loaded.
+          if [ -z "${GIT_CREDENTIALS_DIR}" ]
           then
-            cp "${GIT_CREDENTIALS_DIR}/.gitconfig" ~/.gitconfig
-          else
-            rm ~/.gitconfig
+            exit 0
           fi
+
+          # Point git at an empty global config for the rest of the job.
+          echo "GIT_CONFIG_GLOBAL=/dev/null" >> "${GITHUB_ENV}"
           shred -u "${GIT_CREDENTIALS_DIR}/credentials"
           rm -r -- "${GIT_CREDENTIALS_DIR}"
 
       - name: Configure Python
         uses: actions/setup-python@v6.3.0
         with:
-          python-version: 3.11
+          python-version: "3.14"
 
       - name: Parse ignore files
         shell: python
@@ -455,88 +503,97 @@ jobs:
             with open(gh_env_file, 'a') as f:
               print("TRIVYIGNORE_PATHS", ",".join(paths), sep="=", file=f)
 
-  #     - name: Scan IaC code
-  #       uses: aquasecurity/trivy-action@0.35.0
-  #       id: trivy-scan
-  #       with:
-  #         exit-code: "0"
-  #         format: json
-  #         hide-progress: false
-  #         ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
-  #         output: .trivy-scan-result.json
-  #         scan-ref: ${{ inputs.working-directory }}
-  #         scan-type: config
-  #         severity: ${{ inputs.trivy-severity }}
-  #         trivyignores: ${{ env.TRIVYIGNORE_PATHS }}
+      # aquasecurity/trivy-action v0.36.0 (commit ed142fd0673e97e23eac54620cfb913e5ce36c25,
+      # recorded in actions.lock) was released after the GHSA-69fq-xp46-6x23 tag hijack
+      # of 2026-03-19/20. It installs Trivy through aquasecurity/setup-trivy pinned by
+      # SHA, and `version` pins Trivy v0.70.0, outside the compromised v0.69.4-v0.69.6.
+      # Do not lower either pin.
+      - name: Scan IaC code
+        uses: aquasecurity/trivy-action@v0.36.0
+        id: trivy-scan
+        with:
+          version: v0.70.0
+          exit-code: "0"
+          format: json
+          hide-progress: false
+          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
+          output: .trivy-scan-result.json
+          scan-ref: ${{ inputs.working-directory }}
+          scan-type: config
+          severity: ${{ inputs.trivy-severity }}
+          trivyignores: ${{ env.TRIVYIGNORE_PATHS }}
 
-  #     - name: Parse scan results
-  #       shell: python
-  #       env:
-  #         REPORT_FILENAME: .trivy-scan-result.json
-  #       continue-on-error: ${{ inputs.trivy-error-is-success }}
-  #       run: |
-  #         import json
-  #         import os
-  #         import sys
-
-
-  #         def format_item(*, filename, error):
-  #             """
-  #             Returns a string representing the error, formatted in such a way that
-  #             GitHub will annotate the workflow run based on the severity of the error.
-  #             """
-  #             id = error.get("ID", "-1")
-  #             title = error.get("Title", "<no title>")
-  #             description = error.get("Description", "<no description>")
-  #             message = error.get("Message", "")
-  #             severity = error.get("Severity", "?")
-  #             resolution = error.get("Resolution", "<no resolution>")
-  #             start_line = error.get("CauseMetadata", {}).get("StartLine", "-1")
-  #             end_line = error.get("CauseMetadata", {}).get("EndLine", "-1")
-
-  #             message = f"{id}: {title}%0A{description}%0A{message}%0AResolution: {resolution}%0A"
-  #             for reference in error.get("References", []):
-  #                 message += f"%0A{reference}"
-
-  #             gh_severity = "warning"
-  #             if severity.upper() in ("HIGH", "CRITICAL"):
-  #                 gh_severity = "error"
-
-  #             return f"::{gh_severity} file={filename},line={start_line},endLine={end_line}::{message}"
+      - name: Parse scan results
+        shell: python
+        env:
+          REPORT_FILENAME: .trivy-scan-result.json
+        continue-on-error: ${{ inputs.trivy-error-is-success }}
+        run: |
+          import json
+          import os
+          import sys
 
 
-  #         with open(os.environ["REPORT_FILENAME"], "r") as f:
-  #             report = json.load(f)
-  #         print("Raw report:", json.dumps(report, indent=2))
+          def format_item(*, filename, error):
+              """
+              Returns a string representing the error, formatted in such a way that
+              GitHub will annotate the workflow run based on the severity of the error.
+              """
+              id = error.get("ID", "-1")
+              title = error.get("Title", "<no title>")
+              description = error.get("Description", "<no description>")
+              message = error.get("Message", "")
+              severity = error.get("Severity", "?")
+              resolution = error.get("Resolution", "<no resolution>")
+              start_line = error.get("CauseMetadata", {}).get("StartLine", "-1")
+              end_line = error.get("CauseMetadata", {}).get("EndLine", "-1")
 
-  #         exit_status = 0
-  #         for res in report.get("Results", []):
-  #             filename = res.get("Target", "<no filename>")
-  #             for err in res.get("Misconfigurations", []):
-  #                 print(format_item(filename=filename, error=err))
+              message = f"{id}: {title}%0A{description}%0A{message}%0AResolution: {resolution}%0A"
+              for reference in error.get("References", []):
+                  message += f"%0A{reference}"
 
-  #                 # Since severity filter is set at job level, we can exit non-zero for all
-  #                 # errors regardless of severity and let workflow consumers decide which
-  #                 # severity levels to care about.
-  #                 exit_status = 1
+              gh_severity = "warning"
+              if severity.upper() in ("HIGH", "CRITICAL"):
+                  gh_severity = "error"
 
-  #         sys.exit(exit_status)
+              return f"::{gh_severity} file={filename},line={start_line},endLine={end_line}::{message}"
 
-  # trivy-sbom:
-  #   name: Generate SBOM in ${{ inputs.working-directory }}
-  #   runs-on: ${{ inputs.runs-on }}
-  #   if: inputs.trivy-sbom-enabled
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v6.0.3
-  #     - name: Submit SBOM results to Dependency Snapshots
-  #       uses: aquasecurity/trivy-action@0.35.0
-  #       with:
-  #         scan-type: "fs"
-  #         format: "github"
-  #         output: "dependency-results.sbom.json"
-  #         image-ref: "."
-  #         github-pat: "${{ secrets.GITHUB_TOKEN }}"
+
+          with open(os.environ["REPORT_FILENAME"], "r") as f:
+              report = json.load(f)
+          print("Raw report:", json.dumps(report, indent=2))
+
+          exit_status = 0
+          for res in report.get("Results", []):
+              filename = res.get("Target", "<no filename>")
+              for err in res.get("Misconfigurations", []):
+                  print(format_item(filename=filename, error=err))
+
+                  # Since severity filter is set at job level, we can exit non-zero for all
+                  # errors regardless of severity and let workflow consumers decide which
+                  # severity levels to care about.
+                  exit_status = 1
+
+          sys.exit(exit_status)
+
+  trivy-sbom:
+    name: Generate SBOM in ${{ inputs.working-directory }}
+    runs-on: ${{ inputs.runs-on }}
+    if: inputs.trivy-sbom-enabled
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
+      - name: Submit SBOM results to Dependency Snapshots
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: "fs"
+          format: "github"
+          output: "dependency-results.sbom.json"
+          image-ref: "."
+          github-pat: "${{ secrets.GITHUB_TOKEN }}"
 
   terraform-docs:
     name: Render terraform docs in ${{ inputs.working-directory }}
@@ -545,44 +602,64 @@ jobs:
     needs: [terraform]
     concurrency: terraform-docs
     steps:
-      - name: Get terraform docs credentials
-        id: credentials
-        shell: bash
-        run: |
-          set -e
-
-          GITHUB_TOKEN=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
-          token=$(curl -sS --fail -H "Authorization: Bearer $GITHUB_TOKEN" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_docs_token)
-          terraform_docs_token=$(jq -r .token <<<$token)
-          echo "terraform_docs_token=$terraform_docs_token" >> "$GITHUB_OUTPUT"
+      # No write token is fetched or exposed until the commit step. The checkout
+      # uses the job's read-only token and does not persist it.
       - name: Checkout
         uses: actions/checkout@v6.0.3
         with:
           ref: "${{ github.head_ref }}"
-          token: ${{ steps.credentials.outputs.terraform_docs_token }}
-      - name: setup uv
-        uses: astral-sh/setup-uv@v7
-      - name: Install yq
-        run: uv tool install yq
+          persist-credentials: false
+      # Nothing from the pull request is executed in this job: the steps below
+      # read its files as data and run only the digest-pinned images.
       - name: Get workflow ref
         id: workflow_tag
         shell: bash
+        env:
+          WORKFLOW_REF: ${{ inputs.workflow-ref }}
+          CALLER_REPOSITORY: ${{ github.repository }}
         run: |
-          # Skip auto-detection if input is specified
-          if [[ -n "${{ inputs.workflow-ref }}" ]]
+          # An explicit input gets the same rules as auto-detection: a release tag
+          # (v1, v4.121.0) or main. A commit SHA is accepted only in this
+          # repository's own self-test (test.yaml passes github.sha), where the
+          # workflow under test is not released yet. Anything else uses main.
+          if [[ -n "${WORKFLOW_REF}" ]]
           then
-            echo "workflow_tag=${{ inputs.workflow-ref }}" >> $GITHUB_OUTPUT
+            if [[ "${WORKFLOW_REF}" =~ ^(v[0-9][A-Za-z0-9._-]*|main)$ ]] ||
+               [[ "${CALLER_REPOSITORY}" == "nrkno/github-workflow-terraform-config" && "${WORKFLOW_REF}" =~ ^[0-9a-f]{40}$ ]]
+            then
+              echo "workflow_tag=${WORKFLOW_REF}" >> "$GITHUB_OUTPUT"
+            else
+              echo "Workflow ref '${WORKFLOW_REF}' is not a release tag or main; using main"
+              echo "workflow_tag=main" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
 
+          # Otherwise read the ref this workflow was called with from the caller's
+          # workflow file. That file is part of the pull request, so only a release
+          # tag (v1, v4.121.0) or the default branch is accepted. Anything else, such
+          # as a SHA or a branch, falls back to the default branch.
           workflow_file="${GITHUB_WORKFLOW}"
           if ! [ -f "${workflow_file}" ]
           then
-            workflow_file="$(grep -l "^name: ${GITHUB_WORKFLOW}$" .github/workflows/*)"
+            workflow_file="$(grep -lFx -- "name: ${GITHUB_WORKFLOW}" .github/workflows/* 2>/dev/null | head -1 || true)"
           fi
-          workflow_tag="$(yq -r ".jobs[].uses" < "${workflow_file}"| grep github-workflow-terraform-config | cut -d@ -f2 | head -1)"
-          echo "workflow_tag=${workflow_tag}" >> $GITHUB_OUTPUT
-          cat $GITHUB_OUTPUT
+
+          detected=""
+          if [[ -n "${workflow_file}" && -f "${workflow_file}" ]]
+          then
+            detected="$(grep -h -E '^[[:space:]]*-?[[:space:]]*uses:.*github-workflow-terraform-config' -- "${workflow_file}" | head -1 | sed -E 's/^[^@]*@//; s/[[:space:]#].*$//; s/["'\'']//g' || true)"
+          fi
+
+          if [[ "${detected}" =~ ^(v[0-9][A-Za-z0-9._-]*|main)$ ]]
+          then
+            workflow_tag="${detected}"
+          else
+            echo "Workflow ref '${detected}' is not a release tag or main; using main"
+            workflow_tag="main"
+          fi
+          echo "workflow_tag=${workflow_tag}" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
       - name: Checkout workflow
         id: checkout_workflow
         uses: actions/checkout@v6.0.3
@@ -590,33 +667,85 @@ jobs:
           repository: nrkno/github-workflow-terraform-config
           ref: ${{ steps.workflow_tag.outputs.workflow_tag }}
           path: .github-workflow-terraform-config
+          persist-credentials: false
       - name: Set configuration
         id: set_config
         shell: bash
         env:
           CONFIG_FILE: ${{ inputs.terraform-docs-config-file }}
         run: |
-          if [ -f "$CONFIG_FILE" ]
+          set -euo pipefail
+
+          # The file is written inside the checked-out repository, so it must be a
+          # relative path that stays in the workspace and out of .git, after
+          # resolving symlinks that the pull request may have added.
+          workspace="$(realpath -- "${GITHUB_WORKSPACE}")"
+          resolved="$(realpath -m -- "${workspace}/${CONFIG_FILE}")"
+          relative="${resolved#"${workspace}"/}"
+          if [[ -z "${CONFIG_FILE}" || "${CONFIG_FILE}" == /* || "${resolved}" != "${workspace}"/* || "/${relative}/" == */.git/* ]]
           then
-            echo "Using callers configuration for commitlint"
+            echo "::error::terraform-docs-config-file must be a relative path inside the repository and outside .git"
+            exit 1
+          fi
+
+          if [ -f "${CONFIG_FILE}" ]
+          then
+            echo "Using the caller's configuration for terraform-docs"
           else
-            echo "Using workflow configuration for commitlint"
-            cp -- "${GITHUB_WORKSPACE}/.github-workflow-terraform-config/.terraform-docs.yaml" "$CONFIG_FILE"
+            echo "Using the workflow's configuration for terraform-docs"
+            install -m 0644 -- "${workspace}/.github-workflow-terraform-config/.terraform-docs.yaml" "${resolved}"
           fi
       - name: Remove workflow checkout
         shell: bash
         run: |
           rm -rf -- .github-workflow-terraform-config
-      - name: Render terraform docs and push
-        uses: terraform-docs/gh-actions@v1.4.1
-        with:
-          working-dir: ${{ inputs.working-directory }}
-          config-file: ${{ inputs.terraform-docs-config-file }}
-          fail-on-diff: ${{ inputs.terraform-docs-fail-on-diff }}
-          recursive: ${{ inputs.terraform-docs-recursive }}
-          output-file: ${{ inputs.terraform-docs-output-file }}
-          output-method: ${{ inputs.terraform-docs-output-method }}
-          git-push: false
+      # Runs the terraform-docs/gh-actions image (the one terraform-docs/gh-actions
+      # v1.4.1 uses), pinned by digest. Keep IMAGE in sync with
+      # .github/images/terraform-docs/Dockerfile (checked by CI, bumped by Dependabot).
+      # The container gets no token and never pushes.
+      - name: Render terraform docs
+        shell: bash
+        env:
+          IMAGE: quay.io/terraform-docs/gh-actions:1.4.1@sha256:b3af46b47a0758f81c989706210ce632a64f00d0a150dca8270465f7f62b8031
+          INPUT_WORKING_DIR: ${{ inputs.working-directory }}
+          INPUT_CONFIG_FILE: ${{ inputs.terraform-docs-config-file }}
+          INPUT_FAIL_ON_DIFF: ${{ inputs.terraform-docs-fail-on-diff }}
+          INPUT_RECURSIVE: ${{ inputs.terraform-docs-recursive }}
+          INPUT_OUTPUT_FILE: ${{ inputs.terraform-docs-output-file }}
+          INPUT_OUTPUT_METHOD: ${{ inputs.terraform-docs-output-method }}
+          # The remaining inputs keep the defaults of terraform-docs/gh-actions v1.4.1.
+          INPUT_ATLANTIS_FILE: disabled
+          INPUT_FIND_DIR: disabled
+          INPUT_RECURSIVE_PATH: modules
+          INPUT_OUTPUT_FORMAT: markdown table
+          INPUT_TEMPLATE: |-
+            <!-- BEGIN_TF_DOCS -->
+            {{ .Content }}
+            <!-- END_TF_DOCS -->
+          INPUT_ARGS: ""
+          INPUT_INDENTION: "2"
+          INPUT_GIT_PUSH: "false"
+          INPUT_GIT_COMMIT_MESSAGE: "terraform-docs: automated action"
+          INPUT_GIT_PUSH_SIGN_OFF: "false"
+          INPUT_GIT_PUSH_USER_NAME: ""
+          INPUT_GIT_PUSH_USER_EMAIL: ""
+          INPUT_GIT_SUB_DIR: ""
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --workdir /github/workspace \
+            --volume "${GITHUB_WORKSPACE}:/github/workspace" \
+            --env GITHUB_WORKSPACE=/github/workspace \
+            --env GITHUB_OUTPUT=/dev/null \
+            --env INPUT_WORKING_DIR --env INPUT_CONFIG_FILE --env INPUT_FAIL_ON_DIFF \
+            --env INPUT_RECURSIVE --env INPUT_OUTPUT_FILE --env INPUT_OUTPUT_METHOD \
+            --env INPUT_ATLANTIS_FILE --env INPUT_FIND_DIR --env INPUT_RECURSIVE_PATH \
+            --env INPUT_OUTPUT_FORMAT --env INPUT_TEMPLATE --env INPUT_ARGS \
+            --env INPUT_INDENTION --env INPUT_GIT_PUSH --env INPUT_GIT_COMMIT_MESSAGE \
+            --env INPUT_GIT_PUSH_SIGN_OFF --env INPUT_GIT_PUSH_USER_NAME \
+            --env INPUT_GIT_PUSH_USER_EMAIL --env INPUT_GIT_SUB_DIR \
+            "${IMAGE}"
 
       - name: Check for changes
         id: check_for_changes
@@ -627,7 +756,7 @@ jobs:
           then
             git restore --stage .terraform-docs.*
           fi
-          if [ $(git status --porcelain | grep -c -E '*.\.md$') -eq 0 ]
+          if [ "$(git status --porcelain | grep -c -E '\.md$')" -eq 0 ]
           then
             echo "No changes to .md files"
             echo "changes_detected=false" >> $GITHUB_OUTPUT
@@ -636,12 +765,45 @@ jobs:
             echo "changes_detected=true" >> $GITHUB_OUTPUT
           fi
 
-      - uses: planetscale/ghcommit-action@v0.2.22
+      # The push token is fetched here, used by this one step, and masked from the
+      # moment it exists. It is passed to the container by name (--env GITHUB_TOKEN),
+      # so it is not on any command line, and the container sees only the workspace.
+      # ghcommit reads GITHUB_GRAPHQL_URL to find the API, so the runner's GitHub
+      # URLs are passed through too; without it every push fails. The upstream
+      # action received every GITHUB_* variable. The terraform-docs image reads
+      # only GITHUB_WORKSPACE and GITHUB_OUTPUT, which the render step sets.
+      # Image: the one planetscale/ghcommit-action v0.2.22 builds from, pinned by
+      # digest. Keep IMAGE in sync with .github/images/ghcommit/Dockerfile.
+      - name: Commit documentation changes
         if: steps.check_for_changes.outputs.changes_detected == 'true'
-        with:
-          commit_message: ${{ inputs.terraform-docs-git-commit-message }}
-          repo: ${{ github.repository }}
-          branch: ${{ github.head_ref || github.ref_name }}
-          empty: true
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ steps.credentials.outputs.terraform_docs_token }}
+          IMAGE: ghcr.io/planetscale/ghcommit-action:v0.2.22@sha256:7eb8a6559bfc8df088ac347bde60768f0edd43230c1825fb9005477db47221ca
+          COMMIT_MESSAGE: ${{ inputs.terraform-docs-git-commit-message }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          oidc_token=$(curl -sSL --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r ".value")
+          echo "::add-mask::${oidc_token}"
+          response=$(curl -sS --fail -H "Authorization: Bearer ${oidc_token}" https://terraform-consumer.plattform-public.eno.k8s.az.nrk.cloud/v1/github/workflow_terraform_docs_token)
+          GITHUB_TOKEN=$(jq -r .token <<<"${response}")
+          if [ -z "${GITHUB_TOKEN}" ] || [ "${GITHUB_TOKEN}" = "null" ]
+          then
+            echo "::error::The token service returned no token"
+            exit 1
+          fi
+          echo "::add-mask::${GITHUB_TOKEN}"
+          export GITHUB_TOKEN
+
+          # Arguments: commit message, repo, branch, empty, file pattern, repository path.
+          docker run --rm \
+            --workdir /github/workspace \
+            --volume "${GITHUB_WORKSPACE}:/github/workspace" \
+            --env GITHUB_WORKSPACE=/github/workspace \
+            --env GITHUB_OUTPUT=/dev/null \
+            --env GITHUB_TOKEN \
+            --env GITHUB_GRAPHQL_URL --env GITHUB_API_URL --env GITHUB_SERVER_URL \
+            "${IMAGE}" \
+            "${COMMIT_MESSAGE}" "${REPOSITORY}" "${BRANCH}" true . .

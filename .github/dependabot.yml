@@ -5,7 +5,7 @@ updates:
     directory: "/"
     commit-message:
       include: scope
-      prefix: feat
+      prefix: fix
     schedule:
       interval: daily
       time: "13:00"
@@ -13,3 +13,19 @@ updates:
     open-pull-requests-limit: 5
     reviewers:
       - nrkno/iac-admins
+  # Dependabot cannot read `docker run` lines in workflow steps. It tracks the image
+  # digests that workflow.yaml pins through these Dockerfiles, which are never built.
+  # CI (check-image-pins.sh) fails until workflow.yaml is updated to match, so the
+  # bump PR needs a manual edit of the IMAGE values.
+  - package-ecosystem: "docker"
+    directories:
+      - "/.github/images/terraform-docs"
+      - "/.github/images/ghcommit"
+    commit-message:
+      include: scope
+      prefix: fix
+    schedule:
+      interval: daily
+      time: "13:00"
+      timezone: "Europe/Oslo"
+    open-pull-requests-limit: 5

@@ -1,0 +1,46 @@
+---
+name: Actions lockfile
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/images/**'
+      - '.github/scripts/check-image-pins.sh'
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Verify actions.lock
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install gh-actions-lock
+        # Pinned to a release tag. Offline check below needs no token.
+        run: gh extension install github/gh-actions-lock --pin v0.4.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Verify lockfile covers every action reference
+        # If this fails, run `gh actions-lock` locally and commit .github/workflows/actions.lock.
+        run: gh actions-lock --verify-local
+
+  image-pins:
+    name: Verify pinned container images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify workflow.yaml pins match .github/images
+        # Dependabot bumps the Dockerfiles in .github/images. If this fails, copy the new
+        # image reference into the matching IMAGE value in workflow.yaml.
+        run: .github/scripts/check-image-pins.sh

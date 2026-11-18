@@ -1,9 +1,20 @@
----
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
 name: Commit lint and release
 jobs:
   lint_release:
-    uses: nrkno/github-workflow-semantic-release/.github/workflows/workflow.yaml@v4.18.0
+    # Pinned to the v5.1.5 release commit. The called workflow's jobs request
+    # contents: read (lint) and contents: write + pull-requests: read (release); a
+    # caller must grant at least what the called jobs request, so this is the
+    # minimum that works. Dependabot does not update reusable-workflow SHAs; bump
+    # this by hand and keep the `# vX.Y.Z` comment.
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: nrkno/github-workflow-semantic-release/.github/workflows/workflow.yaml@6a8585e39eabcb53cdbdebfcc76eb9672199089e # v5.1.5
     with:
       runs-on: ubuntu-latest

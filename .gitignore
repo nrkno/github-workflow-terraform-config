@@ -1,3 +1,4 @@
 .terraform*
 !.terraform-docs.yaml
 .trivy-scan-result.json
+__pycache__/
