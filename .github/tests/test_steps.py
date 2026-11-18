@@ -52,7 +52,7 @@ class StepCase(unittest.TestCase):
             cmd = [sys.executable, "-I", "-c", script]
         else:
             cmd = ["bash", "-c", script]
-        return subprocess.run(cmd, cwd=cwd, env=e, capture_output=True, text=True)
+        return subprocess.run(cmd, cwd=cwd, env=e, capture_output=True, text=True, check=False)
 
 
 class RemoveIgnoredFiles(StepCase):
@@ -277,6 +277,49 @@ class Tokens(StepCase):
             r = self.get_token(token_json)
             self.assertNotEqual(r.returncode, 0, token_json)
             self.assertNotIn("terraform_token", self.out.read_text())
+
+    def test_guarded_docs_commit_requests_and_uses_its_own_app_token(self):
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        # The YAML policy test checks when this step may run. Here the actual
+        # step runs with fake network and container commands, not GitHub.
+        for name, script in {
+            "curl": """
+case "${!#}" in
+  http://oidc) echo '{"value":"fake-oidc"}' ;;
+  */workflow_terraform_docs_token)
+    printf '%s\\n' docs-token >> "$CALLS"
+    echo '{"token":"fake-docs-app-token"}'
+    ;;
+  *) exit 1 ;;
+esac
+""",
+            "docker": """
+[[ "$GITHUB_TOKEN" == fake-docs-app-token ]] || exit 1
+printf '%s\\n' docker >> "$CALLS"
+""",
+        }.items():
+            executable = bin_dir / name
+            executable.write_text("#!/usr/bin/env bash\n" + script)
+            executable.chmod(0o755)
+
+        calls = self.tmp / "calls"
+        r = self.run_step(
+            "terraform-docs", "Commit documentation changes", cwd=self.tmp,
+            env={
+                "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "fake-request",
+                "ACTIONS_ID_TOKEN_REQUEST_URL": "http://oidc",
+                "GITHUB_WORKSPACE": str(self.tmp),
+                "COMMIT_MESSAGE": "docs: test",
+                "REPOSITORY": "example/repo",
+                "BRANCH": "test",
+                "IMAGE": "fake-image",
+                "CALLS": str(calls),
+            },
+            path_prefix=str(bin_dir),
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(calls.read_text().splitlines(), ["docs-token", "docker"])
 
 
 class GitCredentials(StepCase):

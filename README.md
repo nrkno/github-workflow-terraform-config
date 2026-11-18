@@ -146,13 +146,10 @@ GraphQL API.
 
 The reusable terraform-docs job reads the pull request files as data. The render
 container receives no push token. The commit step requests a GitHub App
-installation token from `terraform-consumer`, masks it and passes it to the
-container by name. The container variable is named `GITHUB_TOKEN`, but it does
-not hold the workflow-issued token used by this repository's Autodoc workflow.
-The service owner still needs to verify that only trusted docs execution can
-obtain this App token and that the token is limited to the intended repository
-and permissions. The Autodoc change and local step tests do not establish that
-service-side boundary or the deployed token's scope.
+installation token, separate from the workflow-issued `GITHUB_TOKEN` used by
+this repository's Autodoc. Setting `terraform-docs-git-push: false` skips the
+docs commit and its token request. It does not revoke or restrict credentials
+available to other jobs.
 
 ## Trivy
 
@@ -174,9 +171,11 @@ CLI release.
 The local suite runs the workflow's shell and Python steps against hostile input
 and tests Autodoc with a scratch Git remote, not GitHub. It also checks the YAML
 for both privileged self-tests: a draft or missing draft status must not start
-either call, and both calls disable docs pushes. These checks do not request
-credentials or run the privileged workflows. `Step tests` runs them on relevant
-pull requests, including changes to `test.yaml`.
+either call, and both calls disable docs pushes. An offline check runs the
+guarded docs commit step with fake commands to verify that the step requests
+and uses its App token. These tests do not run the privileged workflows, use
+real credentials, or verify token-service authorization. `Step tests` runs them
+on relevant pull requests, including changes to `test.yaml`.
 
 The separate container smoke tests need Docker and network access and run only
 with `RUN_CONTAINER_TESTS=1`. They check that the pinned terraform-docs image
@@ -188,8 +187,10 @@ Run the offline suite locally with:
 python -I -m unittest discover -s .github/tests
 ```
 
-The privileged `Test` workflow is separate. Its draft guard applies only to
-this repository's self-tests, not to callers of the reusable workflow. Keep this
-repository's PRs draft and do not start privileged self-tests while the
-service-side docs token authorization is unresolved: `ready_for_review` can
-start them automatically.
+The privileged `Test` workflow is separate. Its draft guard reads the PR state
+recorded in the triggering event, not the current PR state. It applies only to
+this repository's self-tests, not to callers of the reusable workflow. While
+credential authorization is unresolved, keep this repository's PRs draft and
+do not start or rerun privileged self-tests. Marking a PR ready can start them
+automatically; switching it back to draft does not make earlier runs safe to
+rerun.
