@@ -15,18 +15,17 @@ permissions the caller grants. Grant these:
 Do not grant more. `trivy-sbom-enabled` also needs `contents: write` to submit to the
 Dependency Graph.
 
-```yaml
-permissions:
-  id-token: write
-  contents: read
-  pull-requests: write
+Add a job like this to your caller workflow. Replace `<reviewed-release-commit-sha>`
+with the full SHA of the release you intend to use.
 
-name: Terraform
-uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v4.0.0
-  with:
-    # inputs
-  secrets:
-    # secrets
+```yaml
+jobs:
+  terraform:
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@<reviewed-release-commit-sha>
 ```
 
 <!-- autodoc start -->
@@ -58,18 +57,47 @@ uses: nrkno/github-workflow-terraform-config/.github/workflows/workflow.yaml@v4.
 - `registries`
 <!-- autodoc end -->
 
+### When upgrading
+
+- **Terraform ignore paths now take effect.** The Terraform validation job removes
+  the listed files or directories before running Terraform. Review any existing
+  `terraform-ignore-files` list: paths are resolved against `working-directory`
+  and must stay strictly inside it. Paths resolving to that directory itself or
+  outside it (including through symlinks) fail the step. Empty entries are ignored.
+  This list does not control the Trivy job; `trivy-ignore-files` supplies separate
+  `.trivyignore` files for the scan.
+- **The reusable workflow ref and the docs configuration ref are separate.** Keep
+  `jobs.<job_id>.uses` pinned to a full SHA. The docs job accepts a release-style
+  ref such as `v4.121.0` or `main` when selecting this repository's fallback
+  configuration. Use an existing release tag: a name that matches the expected
+  pattern but does not exist fails checkout. Missing or unsupported ref values
+  (such as `feature/my-branch` or a caller's SHA pin) fall back to `main`. Only
+  this repository's own self-tests can supply an explicit full lowercase SHA.
+  If you need the docs configuration to stay fixed alongside a SHA pin, commit
+  a `.terraform-docs.yaml` to your own repository (or point
+  `terraform-docs-config-file` at another file inside your repository and outside
+  `.git`).
+
 ## Developing
 
 The workflow definition resides in [.github/workflows/workflow.yaml](./.github/workflows/workflow.yaml).
 
 The Autodoc workflow updates this repository's README for same-repository pull
-requests. It runs the workflow and generator from the trusted base, reads the
-pull request as data, and uses the job's `GITHUB_TOKEN` with `contents: write`
-to push only if the branch still points to the event's head commit. Fork pull
-requests are not updated. A push made with `GITHUB_TOKEN` does not trigger new
-workflow runs, so the generated commit does not automatically rerun checks;
-reviewers must account for this when requiring checks on the final commit.
-Repository Actions settings and branch rules must allow the token to push.
+requests; it does not update forks. It runs the workflow and generator from the
+trusted base and reads the pull request as data. It uses GitHub's workflow-issued
+`GITHUB_TOKEN` with `contents: write`, not `SSH_KEY_AUTODOC`, to push only if the
+branch still points to the event's head commit. Repository Actions settings and
+branch rules must allow that push.
+
+A push made with `GITHUB_TOKEN` does not trigger the normal `push` or
+`pull_request` checks for the generated commit. If required checks are missing
+for the resulting head or test merge commit, the pull request can be blocked
+even when all earlier checks passed. Rerunning an old run checks its original
+SHA, not the new head. Have the repository owner verify that required checks run
+on the final merge candidate; do not treat older green checks as evidence for it.
+Before retiring `SSH_KEY_AUTODOC`, the owner must verify that the new Autodoc
+works under the actual rules from a trusted base containing the change, and that
+no other authorized workflow needs the key.
 
 ## References
 
@@ -111,25 +139,57 @@ cannot read `docker run` lines, so it tracks the same references in
 reference into the matching `IMAGE` value; the `image-pins` job in the
 `Actions lockfile` workflow fails until the two agree.
 
-The terraform-docs job runs no code from the pull request: it reads the files as
-data and runs only these images. It fetches its push token only in the commit step,
-masks it at once, and passes it to the container by name. The runner needs Docker, as it
-did for the previous actions.
+The runner still needs Docker. It must be able to pull the pinned images from
+Quay and GitHub Container Registry and mount a writable workspace for rendering.
+When pushing docs, the commit container must also be able to reach GitHub's
+GraphQL API.
+
+The reusable terraform-docs job reads the pull request files as data. The render
+container receives no push token. The commit step requests a GitHub App
+installation token from `terraform-consumer`, masks it and passes it to the
+container by name. The container variable is named `GITHUB_TOKEN`, but it does
+not hold the workflow-issued token used by this repository's Autodoc workflow.
+The service owner still needs to verify that only trusted docs execution can
+obtain this App token and that the token is limited to the intended repository
+and permissions. The Autodoc change and local step tests do not establish that
+service-side boundary or the deployed token's scope.
 
 ## Trivy
 
-The IaC scan and the optional SBOM job use `aquasecurity/trivy-action` v0.36.0
-with Trivy `v0.70.0`, both released after the March 2026 tag compromise
-(GHSA-69fq-xp46-6x23). Do not move either pin to a mutable reference. The SBOM
-job submits to the Dependency Graph with the caller's token, so the caller must
-grant `contents: write` to use `trivy-sbom-enabled`.
+The IaC scan and the optional SBOM job run again. Repositories upgrading from a
+release with the scan disabled may now see validation failures for
+misconfigurations at the selected severities. Review your `trivy-severity`,
+`trivy-ignore-files` and `trivy-ignore-unfixed` settings before upgrading.
+SBOM submission remains off by default. When enabled, it submits to the
+Dependency Graph with the caller's token and requires `contents: write`.
+
+Both jobs use `aquasecurity/trivy-action` v0.36.0 and Trivy `v0.70.0`. These
+versions are outside the compromised versions described in
+[GHSA-69fq-xp46-6x23](https://github.com/advisories/GHSA-69fq-xp46-6x23).
+The lockfile records the action's commit; the `version` input selects the Trivy
+CLI release.
 
 ## Tests
 
-`.github/tests/test_steps.py` runs the workflow's shell and Python steps against
-hostile input (token handling, `terraform-ignore-files`, workflow-ref detection, git
-credentials). CI runs it on pull requests that touch `workflow.yaml`. `test_containers.py` also runs both pinned images (with a fake token, ghcommit must be refused with 401) and runs in CI only when `RUN_CONTAINER_TESTS=1`; it needs Docker and network access. Locally:
+The local suite runs the workflow's shell and Python steps against hostile input
+and tests Autodoc with a scratch Git remote, not GitHub. It also checks the YAML
+for both privileged self-tests: a draft or missing draft status must not start
+either call, and both calls disable docs pushes. These checks do not request
+credentials or run the privileged workflows. `Step tests` runs them on relevant
+pull requests, including changes to `test.yaml`.
+
+The separate container smoke tests need Docker and network access and run only
+with `RUN_CONTAINER_TESTS=1`. They check that the pinned terraform-docs image
+renders a README and that the pinned ghcommit image reaches GitHub and is refused
+with a fake token. They do not verify a real token issuance or successful push.
+Run the offline suite locally with:
 
 ```sh
 python -I -m unittest discover -s .github/tests
 ```
+
+The privileged `Test` workflow is separate. Its draft guard applies only to
+this repository's self-tests, not to callers of the reusable workflow. Keep this
+repository's PRs draft and do not start privileged self-tests while the
+service-side docs token authorization is unresolved: `ready_for_review` can
+start them automatically.

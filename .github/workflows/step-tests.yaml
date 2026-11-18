@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/workflow.yaml'
       - '.github/workflows/autodoc.yaml'
+      - '.github/workflows/test.yaml'
       - '.github/scripts/autodoc.py'
       - '.github/tests/**'
       - '.github/images/**'
